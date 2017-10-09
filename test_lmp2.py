@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from pyscf import gto, scf, mp, lib
 import lmp2
 
