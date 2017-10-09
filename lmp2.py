@@ -51,12 +51,12 @@ def transform(o, psi, axes="all", mode="fast"):
         raise ValueError("Unknown mode: {}".format(mode))
 
 
-def get_lmp2_residuals(mp2_t2, ijkl, fock_occ, fock_virt, ovlp, sparsity_desc, kind="ft-first"):
+def get_lmp2_residuals(mp2_t2, oovv, fock_occ, fock_virt, ovlp, sparsity_desc, kind="ft-first"):
     """
     Calculates LMP2 residuals.
     Args:
         mp2_t2 (dict): sparse LMP2 amplitudes;
-        ijkl (dict): sparse 4-center integrals;
+        oovv (dict): sparse 4-center integrals;
         fock_occ (numpy.ndarray): occupied Fock matrix;
         fock_virt (numpy.ndarray): virtual Fock matrix;
         ovlp (numpy.ndarray): overlap matrix in the virtual space;
@@ -67,7 +67,7 @@ def get_lmp2_residuals(mp2_t2, ijkl, fock_occ, fock_virt, ovlp, sparsity_desc, k
         Sparse residuals for the given amplitudes.
     """
 
-    def oovv_stf_fts(mp2_t2, ijkl, fock_virt, ovlp, sparsity_desc):
+    def oovv_stf_fts(mp2_t2, oovv, fock_virt, ovlp, sparsity_desc):
         result = {}
         for k in sparsity_desc:
             # T2 indexes
@@ -77,7 +77,7 @@ def get_lmp2_residuals(mp2_t2, ijkl, fock_occ, fock_virt, ovlp, sparsity_desc, k
             f = fock_virt[ti, :][:, ti]
             result[k] = numpy.einsum("ab,ar,bs->rs", mp2_t2[k], f, s)
             result[k] += numpy.einsum("ab,ar,bs->rs", mp2_t2[k], s, f)
-            result[k] += ijkl[k]
+            result[k] += oovv[k]
         return result
 
     def overlap_sandwich(mp2_t2, ovlp, sparsity_desc):
@@ -109,7 +109,7 @@ def get_lmp2_residuals(mp2_t2, ijkl, fock_occ, fock_virt, ovlp, sparsity_desc, k
                     result[k][dest] += sts[k_source][source] * fock_occ[k_fock]
         return result
 
-    result = oovv_stf_fts(mp2_t2, ijkl, fock_virt, ovlp, sparsity_desc)
+    result = oovv_stf_fts(mp2_t2, oovv, fock_virt, ovlp, sparsity_desc)
     if kind == "sts-first":
         sts = overlap_sandwich(mp2_t2, ovlp, sparsity_desc)
         sfts = product_with_lmo_fock(sts, fock_occ, sparsity_desc)
@@ -265,10 +265,10 @@ def iter_local_conventional(mol, mo_occ):
             yield i, j, local_atoms, numpy.argwhere(orbs)[:, 0]
 
 
-class SimpleLMP2IntegralProvider(object):
+class AbstractMP2IntegralProvider(object):
     def __init__(self, mol):
         """
-        A simple provider for 4-center integrals in local MP2 which truncates four-center integrals beyond PAO basis.
+        An integral provider for 4-center integrals in local MP2 which truncates four-center integrals beyond PAO basis.
         Args:
             mol (pyscf.Mole): the Mole object;
         """
@@ -278,19 +278,12 @@ class SimpleLMP2IntegralProvider(object):
         """
         Retrieves a subset of electron repulsion integrals corresponding to a given subset of atomic basis functions.
         Args:
-            mole (Mole): the pyscf Mole object;
             atoms (list, tuple): a subset of atoms where the basis functions reside;
 
         Returns:
             A four-index tensor with ERIs belonging to a given subset of atoms.
         """
-        # Dirty hack
-        backup = self.mol._bas
-        new = list(i for i in backup if i[ATOM_OF] in atoms)
-        self.mol._bas = new
-        ovov = self.mol.intor("int2e_sph")
-        self.mol._bas = backup
-        return ovov
+        raise NotImplementedError()
 
     def get_lmo_pao_block(self, atoms, orbitals, lmo1, lmo2, pao):
         """
@@ -306,6 +299,31 @@ class SimpleLMP2IntegralProvider(object):
         Returns:
             A block of 4-center integrals.
         """
+        raise NotImplementedError()
+
+
+class SimpleLMP2IntegralProvider(AbstractMP2IntegralProvider):
+
+    def get_subset_eri(self, atoms):
+        """
+        See parent description.
+        """
+        __doc__ = super(SimpleLMP2IntegralProvider, self).get_subset_eri.__doc__
+
+        # Dirty hack
+        backup = self.mol._bas
+        new = list(i for i in backup if i[ATOM_OF] in atoms)
+        self.mol._bas = new
+        ovov = self.mol.intor("int2e_sph")
+        self.mol._bas = backup
+        return ovov
+
+    def get_lmo_pao_block(self, atoms, orbitals, lmo1, lmo2, pao):
+        """
+        See parent description.
+        """
+        __doc__ = super(SimpleLMP2IntegralProvider, self).get_lmo_pao_block.__doc__
+
         integrals = self.get_subset_eri(atoms)
         n = int(integrals.shape[0]**.5)
         oovv = integrals.reshape((n,) * 4).swapaxes(1, 2)
@@ -332,6 +350,17 @@ class LMP2(object):
             local_space_provider=iter_local_conventional,
             local_integral_provider=SimpleLMP2IntegralProvider,
     ):
+        """
+        A local MP2 implementation by Pulay and Saebo.
+        Args:
+            mf (pyscf.scf.*): a mean-field solution to the given system;
+            localization_provider (pyscf.lo.*): pyscf localization provider;
+            local_space_provider (iterable): an iterable yielding two pair indices, a list of indexes of atoms
+            corresponding to a given subspace and a list of atomic orbitals corresponding to a given subspace;
+
+            local_integral_provider (AbstractMP2IntegralProvider): a class implementing calculation of blocks of
+            four-center integrals;
+        """
         self.mf = mf
         self.localization_provider = localization_provider
         self.local_space_provider = local_space_provider
