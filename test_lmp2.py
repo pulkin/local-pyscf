@@ -8,6 +8,18 @@ from numpy import testing
 
 
 def atomic_chain(n, name='H', spacing=1.4, basis='cc-pvdz', alt_spacing=None):
+    """
+    Creates a Mole object with an atomic chain of a given size.
+    Args:
+        n (int): the size of an atomic chain;
+        name (str): atom caption;
+        spacing (float): spacing between atoms;
+        basis (str): basis string;
+        alt_spacing (float): alternating spacing, if any;
+
+    Returns:
+        A Mole object with an atomic chain.
+    """
     if alt_spacing is None:
         alt_spacing = spacing
     a = 0.5*(spacing+alt_spacing)
