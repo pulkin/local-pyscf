@@ -2,6 +2,7 @@ from pyscf import gto, scf, mp, lib
 import lmp2
 
 import unittest
+from numpy import testing
 
 
 def atomic_chain(n, name='H', spacing=1.4, basis='cc-pvdz', alt_spacing=None):
@@ -29,19 +30,11 @@ class HydrogenChainTest(unittest.TestCase):
 
     def test_h6(self):
         e_ref = self.h6mp2.emp2
-        t2_ref = self.h6mp2.t2
         h6lmp2 = lmp2.LMP2(self.h6mf)
         h6lmp2.kernel()
+        e = h6lmp2.emp2
+        testing.assert_allclose(e, e_ref, rtol=2e-2)
 
 
 if __name__ == "__main__":
-    print "An example LMP2 run"
-    model = atomic_chain(4, alt_spacing=2.3)
-    # model = atomic_chain(20, name='He', spacing=20)
-    model.verbose = 4
-    mf = scf.RHF(model)
-    mf.kernel()
-    print mp.MP2(mf).kernel()[0]
-
-    lmp2 = lmp2.LMP2(mf)#, local_integral_provider=lmp2.DummyLMP2IntegralProvider)#, local_space_provider=lmp2.iter_local_dummy)
-    lmp2.kernel(mixer=lib.diis.DIIS())
+    unittest.main()
