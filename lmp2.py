@@ -10,7 +10,15 @@ import time
 
 def transform(o, psi, axes="all", mode="fast"):
     """
-    Various transformations.
+    A generic transform routine using numpy.einsum.
+    Args:
+        o (numpy.ndarray): a vector/matrix/tensor to transform;
+        psi (numpy.ndarray): a basis to transform to;
+        axes (list, str): dimensions to transform along;
+        mode (str): mode, either 'onecall', calls numpy.einsum once, or 'fast' transforming one axis at a time.
+
+    Returns:
+        A transformed entity.
     """
     n = len(o.shape)
     if axes == "all":
@@ -45,7 +53,18 @@ def transform(o, psi, axes="all", mode="fast"):
 
 def get_lmp2_residuals(mp2_t2, ijkl, fock_occ, fock_virt, ovlp, sparsity_desc, kind="ft-first"):
     """
-    LMP2 residuals in LMO/PAO basis.
+    Calculates LMP2 residuals.
+    Args:
+        mp2_t2 (dict): sparse LMP2 amplitudes;
+        ijkl (dict): sparse 4-center integrals;
+        fock_occ (numpy.ndarray): occupied Fock matrix;
+        fock_virt (numpy.ndarray): virtual Fock matrix;
+        ovlp (numpy.ndarray): overlap matrix in the virtual space;
+        sparsity_desc (dict): lists of PAO basis functions for each pair;
+        kind (str): specifies the order of the tensor product;
+
+    Returns:
+        Sparse residuals for the given amplitudes.
     """
 
     def oovv_stf_fts(mp2_t2, ijkl, fock_virt, ovlp, sparsity_desc):
@@ -106,7 +125,17 @@ def get_lmp2_residuals(mp2_t2, ijkl, fock_occ, fock_virt, ovlp, sparsity_desc, k
 
 
 def get_lmp2_correction(r_pao, fock_occ, fock_basis_local, fock_energies_local):
+    """
+    Transforms residuals into correction to the LMP2 amplitudes.
+    Args:
+        r_pao (dict): sparse residuals;
+        fock_occ (numpy.ndarray): occupied Fock matrix;
+        fock_basis_local (dict): local virtual (PAO) basis for the pairs;
+        fock_energies_local (dict): local virtual (PAO) basis eigenvalues for the pairs;
 
+    Returns:
+        A sparse correction to the LMP2 amplitudes.
+    """
     result = {}
     t2_diff = 0
 
@@ -126,14 +155,20 @@ def get_lmp2_correction(r_pao, fock_occ, fock_basis_local, fock_energies_local):
     return result, t2_diff
 
 
-def get_lmp2_energy(mp2_t2, ijkl):
+def get_lmp2_energy(mp2_t2, oovv):
     """
-    LMP2 energy.
+    Calculates the LMP2 energy.
+    Args:
+        mp2_t2 (dict): sparse LMP2 amplitudes;
+        oovv (dict): sparse 4-center integrals;
+
+    Returns:
+        The LMP2 energy value.
     """
     result = 0
     for k, t2 in mp2_t2.items():
         t2_conj = mp2_t2[k[::-1]]
-        result += numpy.sum(ijkl[k] * (2*t2-t2_conj))
+        result += numpy.sum(oovv[k] * (2 * t2 - t2_conj))
     return result
 
 
@@ -230,60 +265,6 @@ def iter_local_conventional(mol, mo_occ):
             yield i, j, local_atoms, numpy.argwhere(orbs)[:, 0]
 
 
-def iter_local_dummy(mol, mo_occ):
-    """
-    Performs iterations over dummy pair subspaces without any reduction.
-    Args:
-        mol (pyscf.Mole): a Mole object;
-        mo_occ (numpy.ndarray): occupied molecular orbitals;
-
-    Returns:
-        For each pair, returns molecular orbital indexes i, j, a set of atomic indexes corresponding to this pair and
-        a numpy array with atomic orbital indexes corresponding to this pair.
-    """
-
-    for i in range(mo_occ.shape[1]):
-        for j in range(mo_occ.shape[1]):
-            yield i, j, numpy.arange(mol.natm), numpy.arange(mo_occ.shape[0])
-
-
-class DummyLMP2IntegralProvider(object):
-    def __init__(self, mol):
-        """
-        A dummy provider for 4-center integrals in local MP2 which does not take advantage of matrix/tensor sparsity.
-        Args:
-            mol (pyscf.Mole): the Mole object;
-        """
-        integrals = mol.intor("int2e_sph")
-        n = int(integrals.shape[0]**.5)
-        self.oovv = integrals.reshape((n,) * 4).swapaxes(1, 2)
-
-    def get_lmo_pao_block(self, atoms, orbitals, lmo1, lmo2, pao):
-        """
-        Retrieves a block of 4-center integrals in the localized molecular orbitals / projected atomic orbitals basis
-        set.
-        Args:
-            atoms (list): a list of atoms within this space;
-            orbitals (list): a list of orbitals within this space;
-            lmo1 (numpy.ndarray): localized molecular orbital 1;
-            lmo2 (numpy.ndarray): localized molecular orbital 2;
-            pao (numpy.ndarray): projected atomic orbitals;
-
-        Returns:
-            A block of 4-center integrals.
-        """
-        result = transform(
-            transform(
-                transform(self.oovv, lmo1[:, numpy.newaxis], axes=0),
-                lmo2[:, numpy.newaxis],
-                axes=1,
-            ),
-            pao,
-            axes='l2',
-        )
-        return result[0, 0][numpy.ix_(orbitals, orbitals)]
-
-
 class SimpleLMP2IntegralProvider(object):
     def __init__(self, mol):
         """
@@ -366,11 +347,11 @@ class LMP2(object):
         # Sparse
         self.local_orbitals = None
         self.eri_sparse = None
+        self.fock_basis_local = None
+        self.fock_energies_local = None
         self.t2 = None
 
         # Energy
-        self.fock_basis_local = {}
-        self.fock_energies_local = {}
         self.emp2 = None
 
     def get_mol(self):
@@ -489,13 +470,6 @@ class LMP2(object):
             self.fock_basis_local,
             self.fock_energies_local,
         )
-        # mp2_t2_d, t2_diff = get_lmp2_correction_alt(
-        #     r_pao,
-        #     self.fock_lmo,
-        #     self.fock_pao,
-        #     self.ovlp_pao,
-        #     self.local_orbitals,
-        # )
         for k in mp2_t2_d:
             self.t2[k] += mp2_t2_d[k]
 
