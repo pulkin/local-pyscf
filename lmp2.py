@@ -56,7 +56,7 @@ def get_lmp2_residuals(mp2_t2, oovv, fock_occ, fock_virt, ovlp, sparsity_desc, k
     Calculates LMP2 residuals.
     Args:
         mp2_t2 (dict): sparse LMP2 amplitudes;
-        oovv (dict): sparse 4-center integrals;
+        oovv (dict): sparse electron repulsion integrals;
         fock_occ (numpy.ndarray): occupied Fock matrix;
         fock_virt (numpy.ndarray): virtual Fock matrix;
         ovlp (numpy.ndarray): overlap matrix in the virtual space;
@@ -160,7 +160,7 @@ def get_lmp2_energy(mp2_t2, oovv):
     Calculates the LMP2 energy.
     Args:
         mp2_t2 (dict): sparse LMP2 amplitudes;
-        oovv (dict): sparse 4-center integrals;
+        oovv (dict): sparse electron repulsion integrals;
 
     Returns:
         The LMP2 energy value.
@@ -268,7 +268,7 @@ def iter_local_conventional(mol, mo_occ):
 class AbstractMP2IntegralProvider(object):
     def __init__(self, mol):
         """
-        An integral provider for 4-center integrals in local MP2 which truncates four-center integrals beyond PAO basis.
+        An integral provider for electron repulsion integrals in local MP2 which truncates four-center integrals beyond PAO basis.
         Args:
             mol (pyscf.Mole): the Mole object;
         """
@@ -287,7 +287,7 @@ class AbstractMP2IntegralProvider(object):
 
     def get_lmo_pao_block(self, atoms, orbitals, lmo1, lmo2, pao):
         """
-        Retrieves a block of 4-center integrals in the localized molecular orbitals / projected atomic orbitals basis
+        Retrieves a block of electron repulsion integrals in the localized molecular orbitals / projected atomic orbitals basis
         set.
         Args:
             atoms (list): a list of atoms within this space;
@@ -297,7 +297,7 @@ class AbstractMP2IntegralProvider(object):
             pao (numpy.ndarray): projected atomic orbitals;
 
         Returns:
-            A block of 4-center integrals.
+            A block of electron repulsion integrals.
         """
         raise NotImplementedError()
 
@@ -351,7 +351,9 @@ class LMP2(object):
             local_integral_provider=SimpleLMP2IntegralProvider,
     ):
         """
-        A local MP2 implementation by Pulay and Saebo.
+        A local MP2 implementation by Pulay and Saebo. The sparse MP2 integrals and amplitudes are stored as dicts where
+        keys are index pairs of local molecular orbitals and values are square matrices in projected atomic orbital
+        basis sets.
         Args:
             mf (pyscf.scf.*): a mean-field solution to the given system;
             localization_provider (pyscf.lo.*): pyscf localization provider;
