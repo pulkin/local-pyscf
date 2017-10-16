@@ -360,8 +360,7 @@ class LMP2(object):
             local_space_provider (iterable): an iterable yielding two pair indices, a list of indexes of atoms
             corresponding to a given subspace and a list of atomic orbitals corresponding to a given subspace;
 
-            local_integral_provider (AbstractMP2IntegralProvider): a class implementing calculation of blocks of
-            four-center integrals;
+            local_integral_provider (class): a class implementing calculation of blocks of four-center integrals;
         """
         self.mf = mf
         self.localization_provider = localization_provider
