@@ -129,6 +129,17 @@ class HydrogenChainTest(unittest.TestCase):
         e = h6lmp2.emp2
         testing.assert_allclose(e, e_ref, rtol=1e-6)
 
+    def test_tolerance(self):
+        """
+        Tests convergence with a tight tolerance setting.
+        """
+        e_ref = self.h6mp2.emp2
+
+        h6lmp2 = lmp2.LMP2(self.h6mf)
+        h6lmp2.kernel(tolerance=1e-8, maxiter=30)
+        e = h6lmp2.emp2
+        testing.assert_allclose(e, e_ref, rtol=2e-2)
+
 
 if __name__ == "__main__":
     unittest.main()
