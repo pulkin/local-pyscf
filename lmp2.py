@@ -505,13 +505,14 @@ class LMP2(object):
 
         return t2_diff
 
-    def kernel(self, tolerance=1e-4, mixer=None, raise_threshold=1e3):
+    def kernel(self, tolerance=1e-4, mixer=None, raise_threshold=1e3, maxiter=100):
         """
         Performs LMP2 iterations. The energy and amplitudes are stored into self.emp2 and self.t2 respectively.
         Args:
             tolerance (float): desired tolerance of the amplitudes;
             mixer (object): optional mixer for amplitudes;
             raise_threshold (float): raises RuntimeError if the tolerance exceeds the value specified during iterations;
+            maxiter (int): the maximal number of iterations;
 
         Returns:
             The LMP2 energy and LMP2 amplitudes.
@@ -520,6 +521,7 @@ class LMP2(object):
         self.build()
         logger.info(self.mf, "Starting LMP2 iterations ...")
 
+        iterations = 0
         while True:
             t_start = time.time()
             t2_diff = self.update_mp2_amplitudes()
@@ -557,3 +559,11 @@ class LMP2(object):
             if t2_diff < tolerance:
                 logger.note(self.mf, 'converged LMP2 energy = %.15g', self.emp2)
                 return self.emp2, self.t2
+
+            iterations += 1
+            if maxiter is not None and iterations >= maxiter:
+                raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above tolerance {:.3e}".format(
+                    iterations,
+                    t2_diff,
+                    tolerance,
+                ))
