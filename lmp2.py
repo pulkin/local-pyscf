@@ -384,6 +384,8 @@ class LMP2(object):
         # Energy
         self.emp2 = None
 
+        self.iterations = 0
+
     def get_mol(self):
         """
         Retrieves the Mole object.
@@ -521,7 +523,7 @@ class LMP2(object):
         self.build()
         logger.info(self.mf, "Starting LMP2 iterations ...")
 
-        iterations = 0
+        self.iterations = 0
         while True:
             t_start = time.time()
             t2_diff = self.update_mp2_amplitudes()
@@ -553,6 +555,8 @@ class LMP2(object):
                 t_end-t_start,
             ))
 
+            self.iterations += 1
+
             if t2_diff > raise_threshold:
                 raise RuntimeError("Local MP2 diverges")
 
@@ -560,10 +564,9 @@ class LMP2(object):
                 logger.note(self.mf, 'converged LMP2 energy = %.15g', self.emp2)
                 return self.emp2, self.t2
 
-            iterations += 1
-            if maxiter is not None and iterations >= maxiter:
+            if maxiter is not None and self.iterations >= maxiter:
                 raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above tolerance {:.3e}".format(
-                    iterations,
+                    self.iterations,
                     t2_diff,
                     tolerance,
                 ))
