@@ -141,5 +141,31 @@ class HydrogenChainTest(unittest.TestCase):
         testing.assert_allclose(e, e_ref, rtol=2e-2)
 
 
+class HeliumChainTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.he6chain = atomic_chain(6, name="He", spacing=6)
+        cls.he6mf = scf.RHF(cls.he6chain)
+        cls.he6mf.kernel()
+        cls.he6mp2 = mp.MP2(cls.he6mf)
+        cls.he6mp2.kernel()
+
+    def test_he6(self):
+        """
+        Tests the method with default parameters of the local MP2.
+        """
+        e_ref = self.he6mp2.emp2
+
+        he6lmp2 = lmp2.LMP2(self.he6mf)
+        he6lmp2.kernel()
+        e = he6lmp2.emp2
+        testing.assert_allclose(e, e_ref, rtol=2e-2)
+        testing.assert_equal(he6lmp2.iterations, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
+    # suite = unittest.TestSuite()
+    # suite.addTest(HydrogenChainTest("test_h6_no_sparsity"))
+    # runner = unittest.TextTestRunner()
+    # runner.run(suite)
