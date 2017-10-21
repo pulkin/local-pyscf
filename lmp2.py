@@ -7,6 +7,7 @@ import scipy
 
 import time
 
+import common
 
 def transform(o, psi, axes="all", mode="fast"):
     """
@@ -265,16 +266,9 @@ def iter_local_conventional(mol, mo_occ):
             yield i, j, local_atoms, numpy.argwhere(orbs)[:, 0]
 
 
-class AbstractMP2IntegralProvider(object):
-    def __init__(self, mol):
-        """
-        An integral provider for electron repulsion integrals in local MP2 which truncates four-center integrals beyond PAO basis.
-        Args:
-            mol (pyscf.Mole): the Mole object;
-        """
-        self.mol = mol
+class AbstractLMP2IntegralProvider(common.IntegralProvider):
 
-    def get_subset_eri(self, atoms):
+    def get_eri_diagonal_block(self, atoms):
         """
         Retrieves a subset of electron repulsion integrals corresponding to a given subset of atomic basis functions.
         Args:
@@ -302,31 +296,22 @@ class AbstractMP2IntegralProvider(object):
         raise NotImplementedError()
 
 
-class SimpleLMP2IntegralProvider(AbstractMP2IntegralProvider):
+class SimpleLMP2IntegralProvider(AbstractLMP2IntegralProvider):
 
-    def get_subset_eri(self, atoms):
+    def get_eri_diagonal_block(self, atoms):
         """
         See parent description.
         """
-        __doc__ = super(SimpleLMP2IntegralProvider, self).get_subset_eri.__doc__
+        return self.get_eri(atoms, atoms, atoms, atoms)
 
-        # Dirty hack
-        backup = self.mol._bas
-        new = list(i for i in backup if i[ATOM_OF] in atoms)
-        self.mol._bas = new
-        ovov = self.mol.intor("int2e_sph")
-        self.mol._bas = backup
-        return ovov
+    get_eri_diagonal_block.__doc__ = AbstractLMP2IntegralProvider.get_eri_diagonal_block.__doc__
 
     def get_lmo_pao_block(self, atoms, orbitals, lmo1, lmo2, pao):
         """
         See parent description.
         """
-        __doc__ = super(SimpleLMP2IntegralProvider, self).get_lmo_pao_block.__doc__
 
-        integrals = self.get_subset_eri(atoms)
-        n = int(integrals.shape[0]**.5)
-        oovv = integrals.reshape((n,) * 4).swapaxes(1, 2)
+        oovv = self.get_eri_diagonal_block(atoms).swapaxes(1, 2)
         lmo1 = lmo1[orbitals]
         lmo2 = lmo2[orbitals]
         pao = pao[numpy.ix_(orbitals, orbitals)]
@@ -340,6 +325,8 @@ class SimpleLMP2IntegralProvider(AbstractMP2IntegralProvider):
             axes='l2',
         )
         return result[0, 0]
+
+    get_lmo_pao_block.__doc__ = AbstractLMP2IntegralProvider.get_lmo_pao_block.__doc__
 
 
 class LMP2(object):
