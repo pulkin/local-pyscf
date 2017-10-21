@@ -565,7 +565,7 @@ class LMP2(object):
                 return self.emp2, self.t2
 
             if maxiter is not None and self.iterations >= maxiter:
-                raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above tolerance {:.3e}".format(
+                raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above the requested tolerance of {:.3e}".format(
                     self.iterations,
                     t2_diff,
                     tolerance,
