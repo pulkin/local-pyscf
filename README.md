@@ -1,4 +1,9 @@
-lmp2-pyscf
-==========
+Local pyscf
+===========
 
-An example showing how to implement the basic version of local MP2 by Pulay and Saebo.
+Example implementations of local algorithms within pyscf.
+
+Includes:
+
+  - Local MP2 by Pulay and Saebo
+  - Divide-conquer Hartree-Fock by Yang and Lee
