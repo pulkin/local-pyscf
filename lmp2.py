@@ -1,6 +1,5 @@
 from pyscf.lo import PM
 from pyscf.lib import logger
-from pyscf.gto import ATOM_OF
 
 import numpy
 import scipy
@@ -8,6 +7,7 @@ import scipy
 import time
 
 import common
+
 
 def transform(o, psi, axes="all", mode="fast"):
     """
