@@ -39,10 +39,20 @@ class HydrogenChainTest(unittest.TestCase):
         e, _ = self.h6lhf.get_orbs(self.dm, None)
         testing.assert_allclose(e, self.h6mf.mo_energy, rtol=1e-4)
 
+    def test_util(self):
+        """
+        Test utility functions.
+        """
+        t = dchf.DCHF(self.h6chain)
+        t.add_domain([0, 1], domain_core=[0, 1])
+        with self.assertRaises(ValueError):
+            t.domains_cover(r=True)
+
     def test_iter(self):
         """
         Tests DCHF iterations.
         """
+        self.h6lhf.domains_erase()
         domain_size = 2
         buffer_size = 2
         for i in range(0, self.h6chain.natm, domain_size):

@@ -116,6 +116,30 @@ class DCHF(HFLocalIntegralProvider):
             "ovlp": self.get_ovlp(domain, domain),
         })
 
+    def domains_cover(self, r=True):
+        """
+        Checks whether every atom is present in, at least, one domain.
+        Args:
+            r (bool): raises an exception if the return value is False;
+
+        Returns:
+            True if domains cover all atoms.
+        """
+        all_atoms = set(range(self.mol.natm))
+        covered_atoms = set(numpy.concatenate(tuple(i["domain"] for i in self.domains), axis=0))
+        result = all_atoms == covered_atoms
+        if not result and r:
+            raise ValueError("Atoms "+",".join(list(
+                "{:d}".format(i) for i in (all_atoms - covered_atoms)
+            ))+" are not covered by any domain")
+        return result
+
+    def domains_erase(self):
+        """
+        Erases all domain information.
+        """
+        self.domains = []
+
     def update_domain_eigs(self):
         """
         Updates domains' eigenstates and eigenvalues.
@@ -171,6 +195,7 @@ class DCHF(HFLocalIntegralProvider):
         Returns:
             The converged energy value which is also stored as `self.hf_energy`.
         """
+        self.domains_cover(r=True)
         self.dm = scf.get_init_guess(self.mol)
         while True:
             self.update_domain_eigs()
