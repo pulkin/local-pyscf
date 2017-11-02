@@ -21,6 +21,20 @@ class HydrogenChainTest(unittest.TestCase):
 
         cls.h6dchf = dchf.DCHF(cls.h6chain)
 
+    def assign_domains(self, domain_size, buffer_size):
+        """
+        Assigns domains given the size of the domain core region and buffer region.
+        Args:
+            domain_size (int): size of domains' cores;
+            buffer_size (int): size of the domains' buffer regions
+        """
+        self.h6dchf.domains_erase()
+        for i in range(0, self.h6chain.natm, domain_size):
+            self.h6dchf.add_domain(numpy.arange(
+                max(i - buffer_size, 0),
+                min(i + domain_size + buffer_size, self.h6chain.natm),
+            ), domain_core=numpy.arange(i, min(i + domain_size, self.h6chain.natm)))
+
     def test_fock(self):
         """
         Tests the Fock matrix.
@@ -52,14 +66,7 @@ class HydrogenChainTest(unittest.TestCase):
         """
         Tests DCHF iterations.
         """
-        self.h6dchf.domains_erase()
-        domain_size = 2
-        buffer_size = 2
-        for i in range(0, self.h6chain.natm, domain_size):
-            self.h6dchf.add_domain(numpy.arange(
-                max(i - buffer_size, 0),
-                min(i + domain_size + buffer_size, self.h6chain.natm),
-            ), domain_core=numpy.arange(i, min(i + domain_size, self.h6chain.natm)))
+        self.assign_domains(2, 2)
         e = self.h6dchf.iter_hf()
         testing.assert_allclose(self.h6dchf.dm, self.dm, atol=1e-2)
         testing.assert_allclose(self.h6mf.e_tot-self.h6chain.energy_nuc(), e, rtol=1e-4)
