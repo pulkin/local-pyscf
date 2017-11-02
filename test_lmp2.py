@@ -2,6 +2,7 @@
 from pyscf import scf, mp
 import numpy
 import lmp2
+import common
 
 import unittest
 from numpy import testing
@@ -33,9 +34,9 @@ class DummyLMP2IntegralProvider(object):
         Returns:
             A block of 4-center integrals.
         """
-        result = lmp2.transform(
-            lmp2.transform(
-                lmp2.transform(self.oovv, lmo1[:, numpy.newaxis], axes=0),
+        result = common.transform(
+            common.transform(
+                common.transform(self.oovv, lmo1[:, numpy.newaxis], axes=0),
                 lmo2[:, numpy.newaxis],
                 axes=1,
             ),

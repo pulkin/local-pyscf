@@ -9,49 +9,6 @@ import time
 import common
 
 
-def transform(o, psi, axes="all", mode="fast"):
-    """
-    A generic transform routine using numpy.einsum.
-    Args:
-        o (numpy.ndarray): a vector/matrix/tensor to transform;
-        psi (numpy.ndarray): a basis to transform to;
-        axes (list, str): dimensions to transform along;
-        mode (str): mode, either 'onecall', calls numpy.einsum once, or 'fast' transforming one axis at a time.
-
-    Returns:
-        A transformed entity.
-    """
-    n = len(o.shape)
-    if axes == "all":
-        axes = range(n)
-    elif axes == "f2":
-        axes = (0, 1)
-    elif axes == "l2":
-        axes = (n-2, n-1)
-    elif isinstance(axes, int):
-        axes = (axes,)
-    else:
-        axes = tuple(axes)
-    if mode == "fast":
-        result = o
-        for a in axes:
-            result = transform(result, psi, axes=a, mode='onecall')
-        return result
-    elif mode == "onecall":
-        letters = "abcdefghijklmnopqrstuvwxyz"
-        o_subscripts = letters[:n]
-        output_subscripts = str(o_subscripts)
-        letters = letters[n:]
-        p_subscripts = ""
-        for i, ax in enumerate(axes):
-            p_subscripts += ","+o_subscripts[ax]+letters[i]
-            output_subscripts = output_subscripts[:ax]+letters[i]+output_subscripts[ax+1:]
-        subscripts = o_subscripts+p_subscripts+"->"+output_subscripts
-        return numpy.einsum(subscripts, o, *((psi,)*len(axes)))
-    else:
-        raise ValueError("Unknown mode: {}".format(mode))
-
-
 def get_lmp2_residuals(mp2_t2, oovv, fock_occ, fock_virt, ovlp, sparsity_desc, kind="ft-first"):
     """
     Calculates LMP2 residuals.
@@ -144,11 +101,11 @@ def get_lmp2_correction(r_pao, fock_occ, fock_basis_local, fock_energies_local):
         basis = fock_basis_local[k]
         virt_e = fock_energies_local[k]
         # dual = numpy.linalg.inv(basis).T
-        v = transform(v, basis)
+        v = common.transform(v, basis)
 
         denominator = fock_occ[k[0], k[0]] + fock_occ[k[1], k[1]] - virt_e[:, numpy.newaxis] - virt_e[numpy.newaxis, :]
         dt = v / denominator
-        dt_pao = transform(dt, basis.T)
+        dt_pao = common.transform(dt, basis.T)
 
         result[k] = dt_pao
         t2_diff = max(t2_diff, numpy.abs(dt_pao).max())
@@ -315,9 +272,9 @@ class SimpleLMP2IntegralProvider(AbstractLMP2IntegralProvider):
         lmo1 = lmo1[orbitals]
         lmo2 = lmo2[orbitals]
         pao = pao[numpy.ix_(orbitals, orbitals)]
-        result = transform(
-            transform(
-                transform(oovv, lmo1[:, numpy.newaxis], axes=0),
+        result = common.transform(
+            common.transform(
+                common.transform(oovv, lmo1[:, numpy.newaxis], axes=0),
                 lmo2[:, numpy.newaxis],
                 axes=1,
             ),
@@ -440,9 +397,9 @@ class LMP2(object):
         ovlp = self.mf.get_ovlp()
 
         # Transformed Fock and overlap matrices
-        self.fock_lmo = transform(fock, mo_loc)
-        self.fock_pao = transform(fock, projection_matrix)
-        self.ovlp_pao = transform(ovlp, projection_matrix)
+        self.fock_lmo = common.transform(fock, mo_loc)
+        self.fock_pao = common.transform(fock, projection_matrix)
+        self.ovlp_pao = common.transform(ovlp, projection_matrix)
 
         self.initialized_local_integral_provider = self.local_integral_provider(self.get_mol())
         self.local_orbitals = {}

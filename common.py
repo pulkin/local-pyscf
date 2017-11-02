@@ -2,6 +2,49 @@ import numpy
 from pyscf import gto
 
 
+def transform(o, psi, axes="all", mode="fast"):
+    """
+    A generic transform routine using numpy.einsum.
+    Args:
+        o (numpy.ndarray): a vector/matrix/tensor to transform;
+        psi (numpy.ndarray): a basis to transform to;
+        axes (list, str): dimensions to transform along;
+        mode (str): mode, either 'onecall', calls numpy.einsum once, or 'fast' transforming one axis at a time.
+
+    Returns:
+        A transformed array.
+    """
+    n = len(o.shape)
+    if axes == "all":
+        axes = range(n)
+    elif axes == "f2":
+        axes = (0, 1)
+    elif axes == "l2":
+        axes = (n-2, n-1)
+    elif isinstance(axes, int):
+        axes = (axes,)
+    else:
+        axes = tuple(axes)
+    if mode == "fast":
+        result = o
+        for a in axes:
+            result = transform(result, psi, axes=a, mode='onecall')
+        return result
+    elif mode == "onecall":
+        letters = "abcdefghijklmnopqrstuvwxyz"
+        o_subscripts = letters[:n]
+        output_subscripts = str(o_subscripts)
+        letters = letters[n:]
+        p_subscripts = ""
+        for i, ax in enumerate(axes):
+            p_subscripts += ","+o_subscripts[ax]+letters[i]
+            output_subscripts = output_subscripts[:ax]+letters[i]+output_subscripts[ax+1:]
+        subscripts = o_subscripts+p_subscripts+"->"+output_subscripts
+        return numpy.einsum(subscripts, o, *((psi,)*len(axes)))
+    else:
+        raise ValueError("Unknown mode: {}".format(mode))
+
+
 class AbstractIntegralProvider(object):
     def __init__(self, mol):
         """
