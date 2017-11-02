@@ -81,6 +81,13 @@ class HFLocalIntegralProvider(common.IntegralProvider):
 
 class DCHF(HFLocalIntegralProvider):
     def __init__(self, mol):
+        """
+        An implementation of divide-conquer Hartree-Fock calculations. The domains are added via `self.add_domain`
+        method and stored inside `self.domains` list. Each list item contains all information on the domain including
+        the local space description and all relevant integral values.
+        Args:
+            mol (pyscf.mole.Mole): a Mole object to perform calculations;
+        """
         super(DCHF, self).__init__(mol)
         self.domains = []
         self.dm = scf.hf.get_init_guess(mol)
