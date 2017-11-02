@@ -19,7 +19,7 @@ class HydrogenChainTest(unittest.TestCase):
         cls.total_energy = cls.h6mf.e_tot - cls.h6mf.energy_nuc()
         cls.dm = cls.h6mf.make_rdm1()
 
-        cls.h6lhf = dchf.DCHF(cls.h6chain)
+        cls.h6dchf = dchf.DCHF(cls.h6chain)
 
     def test_fock(self):
         """
@@ -28,15 +28,15 @@ class HydrogenChainTest(unittest.TestCase):
         a1 = [1, 2]
         a2 = [1, 3, 4]
         testing.assert_allclose(
-            self.h6mf.get_fock(dm=self.dm)[self.h6lhf.get_block(a1, a2)],
-            self.h6lhf.get_fock(self.dm, a1, a2),
+            self.h6mf.get_fock(dm=self.dm)[self.h6dchf.get_block(a1, a2)],
+            self.h6dchf.get_fock(self.dm, a1, a2),
         )
 
     def test_orb_energies(self):
         """
         Tests exact orbital energies.
         """
-        e, _ = self.h6lhf.get_orbs(self.dm, None)
+        e, _ = self.h6dchf.get_orbs(self.dm, None)
         testing.assert_allclose(e, self.h6mf.mo_energy, rtol=1e-4)
 
     def test_util(self):
@@ -52,14 +52,14 @@ class HydrogenChainTest(unittest.TestCase):
         """
         Tests DCHF iterations.
         """
-        self.h6lhf.domains_erase()
+        self.h6dchf.domains_erase()
         domain_size = 2
         buffer_size = 2
         for i in range(0, self.h6chain.natm, domain_size):
-            self.h6lhf.add_domain(numpy.arange(
+            self.h6dchf.add_domain(numpy.arange(
                 max(i - buffer_size, 0),
                 min(i + domain_size + buffer_size, self.h6chain.natm),
             ), domain_core=numpy.arange(i, min(i + domain_size, self.h6chain.natm)))
-        e = self.h6lhf.iter_hf()
-        testing.assert_allclose(self.h6lhf.dm, self.dm, atol=1e-2)
+        e = self.h6dchf.iter_hf()
+        testing.assert_allclose(self.h6dchf.dm, self.dm, atol=1e-2)
         testing.assert_allclose(self.h6mf.e_tot-self.h6chain.energy_nuc(), e, rtol=1e-4)
