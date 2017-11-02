@@ -163,6 +163,14 @@ class DCHF(HFLocalIntegralProvider):
         return abs(self.dm-old_dm).max()
 
     def iter_hf(self, tolerance=1e-6):
+        """
+        Performs self-consistent iterations.
+        Args:
+            tolerance (float): density matrix convergence criterion
+
+        Returns:
+            The converged energy value which is also stored as `self.hf_energy`.
+        """
         self.dm = scf.get_init_guess(self.mol)
         while True:
             self.update_domain_eigs()
