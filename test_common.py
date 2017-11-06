@@ -5,7 +5,7 @@ import unittest
 from numpy import testing
 
 
-def atomic_chain(n, name='H', spacing=1.4, basis='cc-pvdz', alt_spacing=None):
+def atomic_chain(n, name='H', spacing=1.4, basis='cc-pvdz', alt_spacing=None, **kwargs):
     """
     Creates a Mole object with an atomic chain of a given size.
     Args:
@@ -28,6 +28,7 @@ def atomic_chain(n, name='H', spacing=1.4, basis='cc-pvdz', alt_spacing=None):
         )),
         basis=basis,
         verbose=0,
+        **kwargs
     )
 
 
