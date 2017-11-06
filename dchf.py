@@ -205,7 +205,7 @@ class DCHF(HFLocalIntegralProvider):
                 break
         return abs(self.dm-old_dm).max()
 
-    def iter_hf(self, tolerance=1e-6):
+    def iter_hf(self, tolerance=1e-6, maxiter=100):
         """
         Performs self-consistent iterations.
         Args:
@@ -216,6 +216,7 @@ class DCHF(HFLocalIntegralProvider):
         """
         self.domains_cover(r=True)
         self.dm = scf.get_init_guess(self.mol)
+        self.iterations = 0
         while True:
             self.update_domain_eigs()
             delta = self.update_dm()
@@ -225,3 +226,13 @@ class DCHF(HFLocalIntegralProvider):
             ))
             if delta < tolerance:
                 return self.hf_energy
+
+            self.iterations += 1
+
+            if maxiter is not None and self.iterations >= maxiter:
+                raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above the requested tolerance of {:.3e}".format(
+                    self.iterations,
+                    delta,
+                    tolerance,
+                ))
+
