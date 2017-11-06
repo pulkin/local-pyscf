@@ -160,11 +160,11 @@ class DCHF(HFLocalIntegralProvider):
         """
         Updates the density matrix.
         """
-        all_e = numpy.concatenate(list(i["e"] for i in self.domains), axis=0)
-        all_did = numpy.concatenate(list((j,)*len(i["e"]) for j, i in enumerate(self.domains)), axis=0)
-        all_sid = numpy.concatenate(list(numpy.arange(len(i["e"])) for i in self.domains), axis=0)
+        fock_energies = numpy.concatenate(list(i["e"] for i in self.domains), axis=0)
+        fock_energy_domain_ids = numpy.concatenate(list((j,)*len(i["e"]) for j, i in enumerate(self.domains)), axis=0)
+        fock_energy_state_ids = numpy.concatenate(list(numpy.arange(len(i["e"])) for i in self.domains), axis=0)
 
-        order = numpy.argsort(all_e)
+        order = numpy.argsort(fock_energies)
 
         occupied = 0
         old_dm = self.dm
@@ -172,20 +172,32 @@ class DCHF(HFLocalIntegralProvider):
         self.hf_energy = 0
         break_after = False
         for i in order:
-            domain = self.domains[all_did[i]]
-            j = all_sid[i]
-            psi = domain["psi"][:, j]
+
+            did = fock_energy_domain_ids[i]
+            sid = fock_energy_state_ids[i]
+
+            domain = self.domains[did]
+            psi = domain["psi"][:, sid]
             pm = domain["partition_matrix"]
-            weight = 2*domain["weights"][j]
+            weight = 2*domain["weights"][sid]
             space = domain["basis"]
             h = domain["h"]
             hcore = domain["hcore"]
+
+            if "occupations" not in domain:
+                domain["occupations"] = numpy.zeros_like(domain["e"])
+
+            occupations = domain["occupations"]
+
             dm = 2*numpy.outer(psi, psi)*pm
             if occupied+weight > self.mol.nelectron:
                 dm /= weight
-                weight = self.mol.nelectron-occupied
-                dm *= weight
+                new_weight = self.mol.nelectron-occupied
+                dm *= new_weight
                 break_after = True
+                occupations[sid] = new_weight / weight
+            else:
+                occupations[sid] = 2.0
             self.dm[numpy.ix_(space, space)] += dm
             self.hf_energy += 0.5*((h+hcore)*dm).sum()
             occupied += weight
