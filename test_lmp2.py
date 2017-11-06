@@ -96,14 +96,16 @@ class HydrogenChainTest(unittest.TestCase):
 
     def test_h6_no_sparsity(self):
         """
-        Tests the implementation equivalence to the conventional MP2 when the full LMO/PAO space is employed.
+        Tests the implementation equivalence to the conventional MP2 when the full MO/PAO space is employed and no
+        localization procedure is performed.
         """
         e_ref = self.h6mp2.emp2
 
-        h6lmp2 = lmp2.LMP2(self.h6mf, local_space_provider=iter_local_dummy)
-        h6lmp2.kernel()
+        h6lmp2 = lmp2.LMP2(self.h6mf, local_space_provider=iter_local_dummy, localization_provider=None)
+        h6lmp2.kernel(tolerance=1e-10)
         e = h6lmp2.emp2
         testing.assert_allclose(e, e_ref, rtol=1e-6)
+        testing.assert_equal(h6lmp2.iterations, 2)
 
     def test_tolerance(self):
         """
