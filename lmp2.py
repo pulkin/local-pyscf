@@ -394,7 +394,9 @@ class LMP2(object):
         projection_matrix = self.get_pao_projection_matrix()
 
         # Fock and overlap matrices
-        fock = self.mf.get_fock()
+        #fock = self.mf.get_fock()
+        dual = numpy.linalg.inv(self.mf.mo_coeff).T
+        fock = numpy.einsum("ij,j,kj->ik", dual, self.mf.mo_energy, dual)
         ovlp = self.mf.get_ovlp()
 
         # Transformed Fock and overlap matrices
