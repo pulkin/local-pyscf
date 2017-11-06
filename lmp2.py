@@ -329,6 +329,7 @@ class LMP2(object):
         self.emp2 = None
 
         self.iterations = 0
+        self.convergence_history = []
 
     def get_mol(self):
         """
@@ -468,6 +469,8 @@ class LMP2(object):
         logger.info(self.mf, "Starting LMP2 iterations ...")
 
         self.iterations = 0
+        self.convergence_history = []
+
         while True:
             t_start = time.time()
             t2_diff = self.update_mp2_amplitudes()
@@ -500,6 +503,7 @@ class LMP2(object):
             ))
 
             self.iterations += 1
+            self.convergence_history.append(t2_diff)
 
             if t2_diff > raise_threshold:
                 raise RuntimeError("Local MP2 diverges")
