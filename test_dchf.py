@@ -9,6 +9,22 @@ from numpy import testing
 from test_common import atomic_chain
 
 
+def assign_domains(dchf, domain_size, buffer_size):
+    """
+    Assigns domains given the size of the domain core region and buffer region.
+    Args:
+        dchf (dchf.DCHF): divide-conquer Hartree-Fock setup;
+        domain_size (int): size of domains' cores;
+        buffer_size (int): size of the domains' buffer regions
+    """
+    dchf.domains_erase()
+    for i in range(0, dchf.mol.natm, domain_size):
+        dchf.add_domain(numpy.arange(
+            max(i - buffer_size, 0),
+            min(i + domain_size + buffer_size, dchf.mol.natm),
+        ), domain_core=numpy.arange(i, min(i + domain_size, dchf.mol.natm)))
+
+
 class HydrogenChainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -20,20 +36,6 @@ class HydrogenChainTest(unittest.TestCase):
         cls.dm = cls.h6mf.make_rdm1()
 
         cls.h6dchf = dchf.DCHF(cls.h6chain)
-
-    def assign_domains(self, domain_size, buffer_size):
-        """
-        Assigns domains given the size of the domain core region and buffer region.
-        Args:
-            domain_size (int): size of domains' cores;
-            buffer_size (int): size of the domains' buffer regions
-        """
-        self.h6dchf.domains_erase()
-        for i in range(0, self.h6chain.natm, domain_size):
-            self.h6dchf.add_domain(numpy.arange(
-                max(i - buffer_size, 0),
-                min(i + domain_size + buffer_size, self.h6chain.natm),
-            ), domain_core=numpy.arange(i, min(i + domain_size, self.h6chain.natm)))
 
     def test_fock(self):
         """
@@ -66,7 +68,7 @@ class HydrogenChainTest(unittest.TestCase):
         """
         Tests DCHF iterations.
         """
-        self.assign_domains(2, 2)
+        assign_domains(self.h6dchf, 2, 2)
         e = self.h6dchf.iter_hf()
         testing.assert_allclose(self.h6dchf.dm, self.dm, atol=1e-2)
         testing.assert_allclose(self.h6mf.e_tot-self.h6chain.energy_nuc(), e, rtol=1e-4)
