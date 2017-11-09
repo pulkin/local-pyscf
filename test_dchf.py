@@ -6,7 +6,7 @@ import numpy
 
 import unittest
 from numpy import testing
-from test_common import atomic_chain
+from test_common import helium_chain, hydrogen_dimer_chain
 
 
 def assign_domains(dchf, domain_size, buffer_size):
@@ -28,7 +28,7 @@ def assign_domains(dchf, domain_size, buffer_size):
 class HydrogenChainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.h6chain = atomic_chain(6, alt_spacing=2.3)
+        cls.h6chain = hydrogen_dimer_chain(6)
         cls.h6mf = scf.RHF(cls.h6chain)
         cls.h6mf.kernel()
 
