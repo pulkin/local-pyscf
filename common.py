@@ -89,6 +89,14 @@ class AbstractIntegralProvider(object):
         """
         return numpy.ix_(*tuple(self.get_atom_basis(i) for i in atoms))
 
+    def __dressed_atoms__(self, atoms):
+        if atoms is None:
+            return tuple(range(self.mol.natm))
+        elif isinstance(atoms, int):
+            return atoms,
+        else:
+            return tuple(atoms)
+
     def shell_ranges(self, atoms):
         """
         Retrieves shell ranges corresponding to the set of atoms.
@@ -98,19 +106,15 @@ class AbstractIntegralProvider(object):
         Returns:
             A list of tuples with ranges of shell slices.
         """
-        if atoms is None:
-            return [(0, self.mol.nbas)]
-        if isinstance(atoms, int):
-            atoms = [atoms]
-        result = []
-        for i, shell in enumerate(self.mol._bas):
-            if shell[gto.ATOM_OF] in atoms:
-                if len(result) == 0 or result[-1][1] != i:
-                    result.append((i, i+1))
-                else:
-                    f, t = result[-1]
-                    result[-1] = (f, t+1)
-        return result
+        atoms = self.__dressed_atoms__(atoms)
+        result = numpy.zeros(self.mol._bas.shape[0]+2, dtype=bool)
+        for a in atoms:
+            result[1:-1] = numpy.logical_or(result[1:-1], self.mol._bas[:, gto.ATOM_OF] == a)
+        r1 = result[:-1]
+        r2 = result[1:]
+        fr = numpy.argwhere(numpy.logical_and(numpy.logical_not(r1), r2))[:, 0]
+        to = numpy.argwhere(numpy.logical_and(r1, numpy.logical_not(r2)))[:, 0]
+        return numpy.stack((fr, to), axis=1)
 
     def atomic_basis_size(self, atom):
         """
@@ -139,10 +143,13 @@ class IntegralProvider(AbstractIntegralProvider):
         shls_slice = tuple()
         basis_size = []
         for dim, shell_list in enumerate(shells):
-            if isinstance(shell_list, tuple):
-                shls_slice += shell_list
-            elif isinstance(shell_list, list) and len(shell_list) == 1:
-                shls_slice += shell_list[0]
+            shell_list = numpy.array(shell_list)
+            if len(shell_list.shape) == 1:
+                shls_slice += tuple(shell_list)
+            elif len(shell_list.shape) != 2:
+                raise ValueError("Cannot recognize shell list: {}".format(repr(shell_list)))
+            elif len(shell_list) == 1:
+                shls_slice += tuple(shell_list[0])
             else:
                 ints = []
                 for sh in shell_list:
