@@ -236,3 +236,51 @@ class DCHF(HFLocalIntegralProvider):
                     tolerance,
                 ))
 
+
+class DCMP2(object):
+    def __init__(self, dchf, w_occ=1):
+        """
+        An implementation of the divide-conquer MP2 on top of the divide-conquer Hartree-Fock.
+        Args:
+            dchf (DCHF): a completed divide-conquer Hartree-Fock calculation
+        """
+        self.mf = dchf
+        self.w_occ = w_occ
+
+    def kernel(self):
+        """
+        Calculates DC-MP2 energy and amplitudes.
+        Returns:
+            DC-MP2 energy correction.
+        """
+        e2 = 0
+        for domain in self.mf.domains:
+            occupations = domain["occupations"]
+            selection_occ = numpy.argwhere(occupations >= 1)[:, 0]
+            selection_virt = numpy.argwhere(occupations < 1)[:, 0]
+
+            psi = domain["psi"]
+            psi_occ = psi[:, selection_occ]
+            psi_virt = psi[:, selection_virt]
+
+            e = domain["e"]
+            e_occ = e[selection_occ]
+            e_virt = e[selection_virt]
+
+            domain_atoms = domain["domain"]
+            eri = self.mf.get_eri(domain_atoms, domain_atoms, domain_atoms, domain_atoms).swapaxes(1, 2)
+            xoxv = common.transform(common.transform(eri, psi_occ, axes=1), psi_virt, axes=3)
+            oovv = common.transform(common.transform(xoxv, psi_occ, axes=0), psi_virt, axes=2)
+            t2 = oovv / (
+                e_occ[:, numpy.newaxis, numpy.newaxis, numpy.newaxis] +
+                e_occ[numpy.newaxis, :, numpy.newaxis, numpy.newaxis] -
+                e_virt[numpy.newaxis, numpy.newaxis, :, numpy.newaxis] -
+                e_virt[numpy.newaxis, numpy.newaxis, numpy.newaxis, :]
+            )
+            core_mask = numpy.diag(domain["partition_matrix"])
+            xovv = common.transform(common.transform(xoxv, psi_occ*core_mask[:, numpy.newaxis], axes=0), psi_virt, axes=2)
+            ooxv = common.transform(common.transform(xoxv, psi_occ, axes=0), psi_virt*core_mask[:, numpy.newaxis], axes=2)
+
+            e2 += ((xovv*self.w_occ + ooxv*(1.0-self.w_occ))*(2*t2 - numpy.swapaxes(t2, 0, 1))).sum()
+        self.e2 = e2
+

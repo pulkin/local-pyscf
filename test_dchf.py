@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from pyscf import scf
+from pyscf import scf, mp
 import dchf
 
 import numpy
@@ -46,6 +46,7 @@ class HydrogenChainTest(unittest.TestCase):
         testing.assert_allclose(
             self.h6mf.get_fock(dm=self.dm)[self.h6dchf.get_block(a1, a2)],
             self.h6dchf.get_fock(self.dm, a1, a2),
+            atol=1e-14,
         )
 
     def test_orb_energies(self):
@@ -72,3 +73,28 @@ class HydrogenChainTest(unittest.TestCase):
         e = self.h6dchf.iter_hf()
         testing.assert_allclose(self.h6dchf.dm, self.dm, atol=1e-2)
         testing.assert_allclose(self.h6mf.e_tot-self.h6chain.energy_nuc(), e, rtol=1e-4)
+
+        mp2 = dchf.DCMP2(self.h6dchf)
+        mp2.kernel()
+        e_ref, _ = mp.MP2(self.h6mf).kernel()
+        testing.assert_allclose(e_ref, mp2.e2, atol=1e-4)
+
+
+class HeliumChainTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.he10chain = helium_chain(10)
+
+        cls.he10mf = scf.RHF(cls.he10chain)
+        cls.he10mf.kernel()
+        cls.he10mp2 = mp.MP2(cls.he10mf)
+        cls.he10mp2.kernel()
+
+        cls.he10dchf = dchf.DCHF(cls.he10chain)
+        assign_domains(cls.he10dchf, 1, 3)
+        cls.he10dchf.iter_hf()
+        cls.he10dcmp2 = dchf.DCMP2(cls.he10dchf)
+        cls.he10dcmp2.kernel()
+
+    def test_results(self):
+        testing.assert_allclose(self.he10mp2.e_corr, self.he10dcmp2.e2)
