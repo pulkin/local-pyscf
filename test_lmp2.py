@@ -139,11 +139,9 @@ class HeliumChainTest(unittest.TestCase):
         e = he6lmp2.emp2
         testing.assert_allclose(e, e_ref, rtol=2e-2)
         testing.assert_equal(he6lmp2.iterations, 2)
+        for k, v in he6lmp2.domain_atom_map.items():
+            testing.assert_equal(len(v), 1 if k[0] == k[1] else 2)
 
 
 if __name__ == "__main__":
     unittest.main()
-    # suite = unittest.TestSuite()
-    # suite.addTest(HydrogenChainTest("test_h6_no_sparsity"))
-    # runner = unittest.TextTestRunner()
-    # runner.run(suite)
