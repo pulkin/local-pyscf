@@ -1,6 +1,8 @@
 import numpy
 from pyscf import gto
 
+import itertools
+
 
 def transform(o, psi, axes="all", mode="fast"):
     """
@@ -237,3 +239,45 @@ class IntegralProvider(AbstractIntegralProvider):
             A four-index tensor with ERIs belonging to a given subset of atoms.
         """
         return self.intor_atoms("int2e_sph", atoms1, atoms2, atoms3, atoms4)
+
+
+class SimpleCachingIntegralProvider(IntegralProvider):
+    def __init__(self, mol):
+        IntegralProvider.__init__(self, mol)
+        self.cache = {}
+        self.__stat_1__ = 0
+        self.__stat_2__ = 0
+
+    __init__.__doc__ = IntegralProvider.__init__.__doc__
+
+    def intor_atoms(self, name, *atoms, **kwargs):
+        if len(kwargs) > 0:
+            raise ValueError("Cannot cache integral values with keyword arguments")
+        atoms = tuple(self.__dressed_atoms__(i) for i in atoms)
+        if name not in self.cache:
+            self.cache[name] = {}
+        isolated = tuple()
+        for ax, a in enumerate(atoms):
+            if len(a) == 1:
+                isolated += a
+            if len(a) != 1:
+                return numpy.concatenate(
+                    tuple(self.intor_atoms(name, *(atoms[:ax]+(i,)+atoms[ax+1:])) for i in a),
+                    axis=ax,
+                )
+        cache = self.cache[name]
+        self.__stat_1__ += 1
+        if isolated not in cache:
+            self.__stat_2__ += 1
+            cache[isolated] = IntegralProvider.intor_atoms(self, name, *isolated)
+        return cache[isolated]
+
+    intor_atoms.__doc__ = IntegralProvider.intor_atoms.__doc__
+
+    def cache_factor(self):
+        """
+        Calculates number of cache accesses relative to the number of integral calls.
+        Returns:
+            Cache factor.
+        """
+        return 1.0*self.__stat_1__ / self.__stat_2__
