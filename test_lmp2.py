@@ -6,7 +6,7 @@ import common
 
 import unittest
 from numpy import testing
-from test_common import atomic_chain
+from test_common import helium_chain, hydrogen_dimer_chain
 
 
 class DummyLMP2IntegralProvider(object):
@@ -66,7 +66,7 @@ def iter_local_dummy(mol, mo_occ):
 class HydrogenChainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.h6chain = atomic_chain(6, alt_spacing=2.3)
+        cls.h6chain = hydrogen_dimer_chain(6)
         cls.h6mf = scf.RHF(cls.h6chain)
         cls.h6mf.kernel()
         cls.h6mp2 = mp.MP2(cls.h6mf)
@@ -122,7 +122,7 @@ class HydrogenChainTest(unittest.TestCase):
 class HeliumChainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.he6chain = atomic_chain(6, name="He", spacing=6)
+        cls.he6chain = helium_chain(6)
         cls.he6mf = scf.RHF(cls.he6chain)
         cls.he6mf.kernel()
         cls.he6mp2 = mp.MP2(cls.he6mf)
