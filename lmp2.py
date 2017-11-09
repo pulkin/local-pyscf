@@ -319,10 +319,11 @@ class LMP2(object):
         self.ovlp_pao = None
 
         # Sparse
-        self.local_orbitals = None
-        self.eri_sparse = None
-        self.fock_basis_local = None
-        self.fock_energies_local = None
+        self.domain_orbital_map = None
+        self.domain_atom_map = None
+        self.domain_eri = None
+        self.domain_fock_basis = None
+        self.domain_fock_energies = None
         self.t2 = None
 
         # Energy
@@ -405,15 +406,17 @@ class LMP2(object):
         self.ovlp_pao = common.transform(ovlp, projection_matrix)
 
         self.initialized_local_integral_provider = self.local_integral_provider(self.get_mol())
-        self.local_orbitals = {}
-        self.eri_sparse = {}
-        self.fock_basis_local = {}
-        self.fock_energies_local = {}
+        self.domain_orbital_map = {}
+        self.domain_atom_map = {}
+        self.domain_eri = {}
+        self.domain_fock_basis = {}
+        self.domain_fock_energies = {}
         self.t2 = {}
         for i, j, atoms, orbitals in self.local_space_provider(self.get_mol(), mo_loc):
-            self.local_orbitals[i, j] = orbitals
+            self.domain_orbital_map[i, j] = orbitals
+            self.domain_atom_map[i, j] = atoms
 
-            self.eri_sparse[i, j] = self.initialized_local_integral_provider.get_lmo_pao_block(
+            self.domain_eri[i, j] = self.initialized_local_integral_provider.get_lmo_pao_block(
                 atoms,
                 orbitals,
                 mo_loc[:, i],
@@ -424,9 +427,9 @@ class LMP2(object):
             local_fock = self.fock_pao[numpy.ix_(orbitals, orbitals)]
             local_ovlp = ovlp[numpy.ix_(orbitals, orbitals)]
             energies, states = scipy.linalg.eigh(local_fock, local_ovlp)
-            self.fock_energies_local[i, j] = energies
-            self.fock_basis_local[i, j] = states
-            self.t2[i, j] = numpy.zeros((len(orbitals),)*2, dtype=self.eri_sparse[i, j].dtype)
+            self.domain_fock_energies[i, j] = energies
+            self.domain_fock_basis[i, j] = states
+            self.t2[i, j] = numpy.zeros((len(orbitals),) * 2, dtype=self.domain_eri[i, j].dtype)
 
     def update_mp2_amplitudes(self):
         """
@@ -437,17 +440,17 @@ class LMP2(object):
         """
         r_pao = get_lmp2_residuals(
             self.t2,
-            self.eri_sparse,
+            self.domain_eri,
             self.fock_lmo,
             self.fock_pao,
             self.ovlp_pao,
-            self.local_orbitals,
+            self.domain_orbital_map,
         )
         mp2_t2_d, t2_diff = get_lmp2_correction(
             r_pao,
             self.fock_lmo,
-            self.fock_basis_local,
-            self.fock_energies_local,
+            self.domain_fock_basis,
+            self.domain_fock_energies,
         )
         for k in mp2_t2_d:
             self.t2[k] += mp2_t2_d[k]
@@ -496,7 +499,7 @@ class LMP2(object):
                     offset += size
 
             # Update energy
-            self.emp2 = get_lmp2_energy(self.t2, self.eri_sparse)
+            self.emp2 = get_lmp2_energy(self.t2, self.domain_eri)
             t_end = time.time()
             logger.info(self.mf, "  E = {:.10f} delta = {:.3e} time = {:.1f} s".format(
                 self.emp2,
