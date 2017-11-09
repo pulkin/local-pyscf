@@ -223,7 +223,7 @@ def iter_local_conventional(mol, mo_occ):
             yield i, j, local_atoms, numpy.argwhere(orbs)[:, 0]
 
 
-class AbstractLMP2IntegralProvider(common.IntegralProvider):
+class AbstractLMP2IntegralProvider(common.SimpleCachingIntegralProvider):
 
     def get_eri_diagonal_block(self, atoms):
         """
