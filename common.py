@@ -1,7 +1,6 @@
 import numpy
+from scipy import special
 from pyscf import gto
-
-import itertools
 
 
 def transform(o, psi, axes="all", mode="fast"):
@@ -276,8 +275,37 @@ class SimpleCachingIntegralProvider(IntegralProvider):
 
     def cache_factor(self):
         """
-        Calculates number of cache accesses relative to the number of integral calls.
+        Calculates number of cache accesses relative to the number of integral evaluations.
         Returns:
             Cache factor.
         """
         return 1.0*self.__stat_1__ / self.__stat_2__
+
+
+def fermi_distribution(chemical_potential, temperature, energies):
+    """
+    Fermi distribution function.
+    Args:
+        chemical_potential (float): the chemical potential;
+        temperature (float): temperature in energy units;
+        energies (numpy.ndarray): vavlues of states' energies;
+
+    Returns:
+        An array with occupation numbers.
+    """
+    return 2./(numpy.exp((energies - chemical_potential)/temperature) + 1)
+
+
+def gaussian_distribution(chemical_potential, temperature, energies):
+    """
+    Gaussian distribution function.
+    Args:
+        chemical_potential (float): the chemical potential;
+        temperature (float): temperature in energy units;
+        energies (numpy.ndarray): vavlues of states' energies;
+
+    Returns:
+        An array with occupation numbers.
+    """
+    return 1 - special.erf((energies-chemical_potential)/temperature)
+
