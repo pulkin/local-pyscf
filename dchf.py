@@ -92,6 +92,7 @@ class DCHF(HFLocalIntegralProvider):
         self.domains = []
         self.dm = scf.hf.get_init_guess(mol)
         self.hf_energy = None
+        self.convergence_history = []
 
     def add_domain(self, domain, domain_partition_matrix=None, domain_core=None):
         """
@@ -216,7 +217,7 @@ class DCHF(HFLocalIntegralProvider):
         """
         self.domains_cover(r=True)
         self.dm = scf.get_init_guess(self.mol)
-        self.iterations = 0
+        self.convergence_history = []
         while True:
             self.update_domain_eigs()
             delta = self.update_dm()
@@ -224,14 +225,13 @@ class DCHF(HFLocalIntegralProvider):
                 self.hf_energy,
                 delta,
             ))
+            self.convergence_history.append(delta)
             if delta < tolerance:
                 return self.hf_energy
 
-            self.iterations += 1
-
-            if maxiter is not None and self.iterations >= maxiter:
+            if maxiter is not None and len(self.convergence_history) >= maxiter:
                 raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above the requested tolerance of {:.3e}".format(
-                    self.iterations,
+                    maxiter,
                     delta,
                     tolerance,
                 ))
