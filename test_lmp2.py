@@ -105,7 +105,7 @@ class HydrogenChainTest(unittest.TestCase):
         h6lmp2.kernel(tolerance=1e-10)
         e = h6lmp2.emp2
         testing.assert_allclose(e, e_ref, rtol=1e-6)
-        testing.assert_equal(h6lmp2.iterations, 2)
+        testing.assert_equal(len(h6lmp2.convergence_history), 2)
 
     def test_tolerance(self):
         """
@@ -138,7 +138,7 @@ class HeliumChainTest(unittest.TestCase):
         he6lmp2.kernel()
         e = he6lmp2.emp2
         testing.assert_allclose(e, e_ref, rtol=2e-2)
-        testing.assert_equal(he6lmp2.iterations, 2)
+        testing.assert_equal(len(he6lmp2.convergence_history), 2)
         for k, v in he6lmp2.domain_atom_map.items():
             testing.assert_equal(len(v), 1 if k[0] == k[1] else 2)
 
