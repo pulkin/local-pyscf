@@ -80,19 +80,23 @@ class HFLocalIntegralProvider(common.IntegralProvider):
 
 
 class DCHF(HFLocalIntegralProvider):
-    def __init__(self, mol):
+    def __init__(self, mol, distribution_function=common.gaussian_distribution, temperature=30):
         """
         An implementation of divide-conquer Hartree-Fock calculations. The domains are added via `self.add_domain`
         method and stored inside `self.domains` list. Each list item contains all information on the domain including
         the local space description and all relevant integral values.
         Args:
             mol (pyscf.mole.Mole): a Mole object to perform calculations;
+            distribution_function (func): a finite-temperature distribution function;
+            temperature (float): temperature of the distribution in Kelvin;
         """
         super(DCHF, self).__init__(mol)
         self.domains = []
         self.dm = scf.hf.get_init_guess(mol)
         self.hf_energy = None
         self.convergence_history = []
+        self.distribution_function = distribution_function
+        self.temperature = temperature*8.621738e-5
 
     def add_domain(self, domain, domain_partition_matrix=None, domain_core=None):
         """
@@ -160,64 +164,55 @@ class DCHF(HFLocalIntegralProvider):
     def update_dm(self):
         """
         Updates the density matrix.
+        Args:
+            distribution_function (func): a function of two arguments, the chemical potential and state energies
+            (array), returning an array of state occupations. Should be smooth and differentiable;
         """
         fock_energies = numpy.concatenate(list(i["e"] for i in self.domains), axis=0)
         fock_energy_domain_ids = numpy.concatenate(list((j,)*len(i["e"]) for j, i in enumerate(self.domains)), axis=0)
         fock_energy_state_ids = numpy.concatenate(list(numpy.arange(len(i["e"])) for i in self.domains), axis=0)
+        fock_energy_weights = numpy.concatenate(list(i["weights"] for i in self.domains), axis=0)
 
-        order = numpy.argsort(fock_energies)
+        chemical_potential = scipy.optimize.minimize_scalar(
+            lambda x: ((self.distribution_function(x, self.temperature, fock_energies)*fock_energy_weights).sum()-self.mol.nelectron)**2,
+            bounds=(fock_energies.min(), fock_energies.max()),
+        )["x"]
 
-        occupied = 0
+        weights = self.distribution_function(chemical_potential, self.temperature, fock_energies)
         old_dm = self.dm
         self.dm = numpy.zeros_like(self.dm)
         self.hf_energy = 0
-        break_after = False
-        for i in order:
-
-            did = fock_energy_domain_ids[i]
-            sid = fock_energy_state_ids[i]
-
+        for did, sid, w in zip(fock_energy_domain_ids, fock_energy_state_ids, weights):
             domain = self.domains[did]
             psi = domain["psi"][:, sid]
             pm = domain["partition_matrix"]
-            weight = 2*domain["weights"][sid]
             space = domain["basis"]
             h = domain["h"]
             hcore = domain["hcore"]
-
             if "occupations" not in domain:
                 domain["occupations"] = numpy.zeros_like(domain["e"])
 
             occupations = domain["occupations"]
-
-            dm = 2*numpy.outer(psi, psi)*pm
-            if occupied+weight > self.mol.nelectron:
-                dm /= weight
-                new_weight = self.mol.nelectron-occupied
-                dm *= new_weight
-                break_after = True
-                occupations[sid] = new_weight / weight
-            else:
-                occupations[sid] = 2.0
+            occupations[sid] = w
+            dm = pm*numpy.outer(psi, psi)*w
             self.dm[numpy.ix_(space, space)] += dm
             self.hf_energy += 0.5*((h+hcore)*dm).sum()
-            occupied += weight
-            if break_after:
-                break
+
         return abs(self.dm-old_dm).max()
 
-    def iter_hf(self, tolerance=1e-6, maxiter=100):
+    def kernel(self, tolerance=1e-6, maxiter=100, temperature=300):
         """
         Performs self-consistent iterations.
         Args:
             tolerance (float): density matrix convergence criterion
+            TODO
 
         Returns:
             The converged energy value which is also stored as `self.hf_energy`.
         """
         self.domains_cover(r=True)
-        self.dm = scf.get_init_guess(self.mol)
         self.convergence_history = []
+
         while True:
             self.update_domain_eigs()
             delta = self.update_dm()
