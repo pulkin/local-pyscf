@@ -70,13 +70,40 @@ class HydrogenChainTest(unittest.TestCase):
         Tests DCHF iterations.
         """
         assign_domains(self.h6dchf, 2, 2)
-        e = self.h6dchf.iter_hf()
+        e = self.h6dchf.kernel()
         testing.assert_allclose(self.h6dchf.dm, self.dm, atol=1e-2)
         testing.assert_allclose(self.h6mf.e_tot-self.h6chain.energy_nuc(), e, rtol=1e-4)
 
         mp2 = dchf.DCMP2(self.h6dchf)
         mp2.kernel()
         e_ref, _ = mp.MP2(self.h6mf).kernel()
+        testing.assert_allclose(e_ref, mp2.e2, atol=1e-4)
+
+
+class HydrogenChain12Test(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.h12chain = hydrogen_dimer_chain(16)
+        cls.h12mf = scf.RHF(cls.h12chain)
+        cls.h12mf.kernel()
+
+        cls.total_energy = cls.h12mf.e_tot - cls.h12mf.energy_nuc()
+        cls.dm = cls.h12mf.make_rdm1()
+
+        cls.h12dchf = dchf.DCHF(cls.h12chain)
+
+    def test_iter(self):
+        """
+        Tests DCHF iterations.
+        """
+        assign_domains(self.h12dchf, 4, 2)
+        e = self.h12dchf.kernel(tolerance=1e-9)
+        testing.assert_allclose(self.h12dchf.dm, self.dm, atol=1e-2)
+        testing.assert_allclose(self.h12mf.e_tot - self.h12chain.energy_nuc(), e, rtol=1e-4)
+
+        mp2 = dchf.DCMP2(self.h12dchf)
+        mp2.kernel()
+        e_ref, _ = mp.MP2(self.h12mf).kernel()
         testing.assert_allclose(e_ref, mp2.e2, atol=1e-4)
 
 
@@ -92,7 +119,7 @@ class HeliumChainTest(unittest.TestCase):
 
         cls.he10dchf = dchf.DCHF(cls.he10chain)
         assign_domains(cls.he10dchf, 1, 3)
-        cls.he10dchf.iter_hf()
+        cls.he10dchf.kernel()
         cls.he10dcmp2 = dchf.DCMP2(cls.he10dchf)
         cls.he10dcmp2.kernel()
 
