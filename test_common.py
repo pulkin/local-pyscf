@@ -32,16 +32,16 @@ def atomic_chain(n, name='H', spacing=1.4, basis='cc-pvdz', alt_spacing=None, **
     )
 
 
-def helium_chain(n):
-    return atomic_chain(n, name="He", spacing=6)
+def helium_chain(n, **kwargs):
+    return atomic_chain(n, name="He", spacing=6, **kwargs)
 
 
-def hydrogen_dimer_chain(n):
-    return atomic_chain(n, alt_spacing=2.3)
+def hydrogen_dimer_chain(n, **kwargs):
+    return atomic_chain(n, alt_spacing=2.3, **kwargs)
 
 
-def hydrogen_distant_dimer_chain(n):
-    return atomic_chain(n, alt_spacing=6)
+def hydrogen_distant_dimer_chain(n, **kwargs):
+    return atomic_chain(n, alt_spacing=6, **kwargs)
 
 
 class DummyIntegralProvider(common.AbstractIntegralProvider):
