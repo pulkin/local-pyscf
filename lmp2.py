@@ -329,7 +329,6 @@ class LMP2(object):
         # Energy
         self.emp2 = None
 
-        self.iterations = 0
         self.convergence_history = []
 
     def get_mol(self):
@@ -473,7 +472,6 @@ class LMP2(object):
         self.build()
         logger.info(self.mf, "Starting LMP2 iterations ...")
 
-        self.iterations = 0
         self.convergence_history = []
 
         while True:
@@ -507,7 +505,6 @@ class LMP2(object):
                 t_end-t_start,
             ))
 
-            self.iterations += 1
             self.convergence_history.append(t2_diff)
 
             if t2_diff > raise_threshold:
@@ -517,9 +514,9 @@ class LMP2(object):
                 logger.note(self.mf, 'converged LMP2 energy = %.15g', self.emp2)
                 return self.emp2, self.t2
 
-            if maxiter is not None and self.iterations >= maxiter:
+            if maxiter is not None and len(self.convergence_history) >= maxiter:
                 raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above the requested tolerance of {:.3e}".format(
-                    self.iterations,
+                    maxiter,
                     t2_diff,
                     tolerance,
                 ))
