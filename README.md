@@ -7,3 +7,5 @@ Includes:
 
   - Local MP2 by Pulay and Saebo
   - Divide-conquer Hartree-Fock by Yang and Lee
+    - Divide-conquer MP2
+    
