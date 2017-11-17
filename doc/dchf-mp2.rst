@@ -1,11 +1,11 @@
-*****************************************
-Divide-conquer MP2 by Kobayashi and Nakai
-*****************************************
+*********************************************************
+Divide-conquer perturbation theory by Kobayashi and Nakai
+*********************************************************
 
-Errors in MP2 energies
-======================
+Errors in HF, MP2 and CCSD energies
+===================================
 
-Hartree-Fock (HF) and second-order correction energies (MP2) obtained with DC approach compared to conventional calculations.
+Hartree-Fock (HF) and second-order correction energies (MP2, CCSD) obtained with DC approach compared to conventional calculations.
 
 .. plot:: plots/30-dcmp2-errors_cached.py
 

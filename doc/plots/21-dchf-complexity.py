@@ -34,14 +34,24 @@ def setup_full(model):
     return hf
 
 
+def get_scaling(x, y):
+    while True:
+        try:
+            return curve_fit(lambda x, a, p: a * (x ** p), x, y, p0=(5, y[-1]/x[-1]**5))[0]
+        except RuntimeError:
+            x, y = x[1:], y[1:]
+            if len(x)<2:
+                return float("nan")
+
+
 for label, constructor in (
         ("He chains", helium_chain),
         ("H chains", hydrogen_dimer_chain),
 ):
-    for driver, label2, marker in (
-        (scf.RHF, "pyscf HF", "x"),
-        (setup, "DCHF", "o"),
-        (setup_full, "custom HF", "+")
+    for driver, label2, marker, ls in (
+        (scf.RHF, "pyscf HF", "x", "--"),
+        (setup, "DCHF", "o", None),
+        (setup_full, "custom HF", "+", "--")
     ):
         dt = None
 
@@ -63,17 +73,14 @@ for label, constructor in (
                 times.append(dt)
                 print "  time {:.3f}s".format(times[-1])
 
-        f = lambda x, a, p: a*(x**p)
-        try:
-            popt = curve_fit(f, chain_size[:len(times)], times, p0=(5, times[-1]/chain_size[len(times)-1]**5))[0]
-        except RuntimeError:
-            popt = [float("nan"), float("nan")]
+        popt = get_scaling(chain_size[:len(times)][-3:], times[-3:])
 
         pyplot.loglog(
             chain_size[:len(times)],
             times,
             label=label+" ("+label2+") s={:.1f}".format(popt[1]),
             marker=marker,
+            ls=ls,
         )
 
 pyplot.xlabel("Model size")

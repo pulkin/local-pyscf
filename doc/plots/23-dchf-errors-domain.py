@@ -24,7 +24,7 @@ pyplot.figure(figsize=(12, 4.8))
 pyplot.subplot(121)
 for domain_size in [2, 4, 6, 8, 12, 24]:
     print "Size={:d}".format(domain_size)
-    x = list(sorted(set([0, 2, (domain_size//4)*2, domain_size, 2*domain_size])))
+    x = list(sorted(set([0, 2, (domain_size//4)*2, domain_size])))
     y = []
     for buffer_size in x:
         print "  buff={:d}".format(buffer_size)
