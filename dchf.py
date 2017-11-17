@@ -1,4 +1,4 @@
-from pyscf import scf
+from pyscf import scf, mp, cc
 from pyscf.lib import logger
 
 import numpy
@@ -79,8 +79,47 @@ class HFLocalIntegralProvider(common.IntegralProvider):
         return scipy.linalg.eigh(fock, ovlp)
 
 
+class Domain(object):
+    def __init__(self, atoms, provider, partition_matrix=None, core=None):
+        """
+        Describes a domain composed of atoms.
+        Args:
+            atoms (list, tuple): a list of atoms of the domain;
+            provider (common.IntegralProvider): provider of integral values;
+            partition_matrix (numpy.ndarray): partition matrix for this domain;
+            core (list, tuple): atoms included in the core of this domain;
+        """
+        self.atoms = tuple(atoms)
+        self.ao = provider.get_atom_basis(atoms)
+        self.shell_ranges = provider.shell_ranges(self.atoms)
+
+        n = len(self.ao)
+
+        if partition_matrix is None and core is None:
+            self.partition_matrix = numpy.ones((n, n), dtype=float)
+
+        elif partition_matrix is not None:
+            self.partition_matrix = partition_matrix
+
+        elif core is not None:
+            core_idx = provider.get_atom_basis(core, domain=atoms)
+            boundary_idx = provider.get_atom_basis(list(set(atoms) - set(core)), domain=atoms)
+            self.partition_matrix = numpy.zeros((n, n), dtype=float)
+            self.partition_matrix[numpy.ix_(core_idx, core_idx)] = 1.0
+            self.partition_matrix[numpy.ix_(core_idx, boundary_idx)] = 0.5
+            self.partition_matrix[numpy.ix_(boundary_idx, core_idx)] = 0.5
+
+        self.d2i = provider.get_block(self.atoms, self.atoms)
+        self.hcore = provider.get_hcore(self.atoms, self.atoms)
+        self.ovlp = provider.get_ovlp(self.atoms, self.atoms)
+        self.eri = provider.get_eri(self.atoms, self.atoms, self.atoms, self.atoms)
+
+        self.mol = provider.__mol__.copy()
+        self.mol._bas = numpy.concatenate(tuple(self.mol._bas[start:end] for start, end in self.shell_ranges), axis=0)
+
+
 class DCHF(HFLocalIntegralProvider):
-    def __init__(self, mol, distribution_function=common.gaussian_distribution, temperature=30):
+    def __init__(self, mol, distribution_function=common.gaussian_distribution, temperature=30, eri_threshold=1e-12):
         """
         An implementation of divide-conquer Hartree-Fock calculations. The domains are added via `self.add_domain`
         method and stored inside `self.domains` list. Each list item contains all information on the domain including
@@ -89,44 +128,74 @@ class DCHF(HFLocalIntegralProvider):
             mol (pyscf.mole.Mole): a Mole object to perform calculations;
             distribution_function (func): a finite-temperature distribution function;
             temperature (float): temperature of the distribution in Kelvin;
+            eri_threshold (float): threshold to discard electron repulsion integrals according to Cauchy-Schwartz upper
+            boundary;
         """
         super(DCHF, self).__init__(mol)
-        self.domains = []
-        self.dm = scf.hf.get_init_guess(mol)
-        self.hf_energy = None
-        self.convergence_history = []
         self.distribution_function = distribution_function
         self.temperature = temperature*8.621738e-5
+        self.eri_threshold = eri_threshold
 
-    def add_domain(self, domain, domain_partition_matrix=None, domain_core=None):
+        self.domains = []
+
+        self.dm = None
+        self.hf_energy = None
+        self.mu = None
+        self.convergence_history = []
+        self.eri_j = self.eri_k = None
+
+    def add_domain(self, domain, partition_matrix=None, core=None):
         """
         Adds a domain.
         Args:
             domain (list, tuple): a list of atoms included into this domain;
-            domain_partition_matrix (numpy.ndarray): partition matrix for this domain;
-            domain_core (list, tuple): atoms included in the core of this domain;
+            partition_matrix (numpy.ndarray): partition matrix for this domain;
+            core (list, tuple): atoms included in the core of this domain;
         """
-        domain_basis = self.get_atom_basis(domain)
-        if domain_partition_matrix is None and domain_core is None:
-            raise ValueError("Either 'domain_partition_matrix' or 'domain_core' has to be specified")
-        elif domain_partition_matrix is not None:
-            pass
-        elif domain_core is not None:
-            core_idx = self.get_atom_basis(domain_core, domain=domain)
-            boundary_idx = self.get_atom_basis(list(set(domain) - set(domain_core)), domain=domain)
-            domain_partition_matrix = numpy.zeros((len(domain_basis), len(domain_basis)), dtype=float)
-            domain_partition_matrix[numpy.ix_(core_idx, core_idx)] = 1.0
-            domain_partition_matrix[numpy.ix_(core_idx, boundary_idx)] = 0.5
-            domain_partition_matrix[numpy.ix_(boundary_idx, core_idx)] = 0.5
-        self.domains.append({
-            "domain": domain,
-            "basis": domain_basis,
-            "partition_matrix": domain_partition_matrix,
-            "eri_j": self.get_eri(domain, domain, None, None),
-            "eri_k": self.get_eri(domain, None, None, domain),
-            "hcore": self.get_hcore(domain, domain),
-            "ovlp": self.get_ovlp(domain, domain),
-        })
+        self.domains.append(Domain(domain, self, partition_matrix=partition_matrix, core=core))
+
+    def domains_pattern(self, n):
+        """
+        Calculates a domain pattern.
+        Args:
+            n (int): the number of dimensions;
+
+        Returns:
+            An `n`-dimensional tensor masking the union of domains.
+        """
+        result = numpy.zeros((len(self.__ao_ownership__),)*n)
+        for d in self.domains:
+            result[numpy.ix_(*((d.ao,)*n))] = True
+        return result
+
+    def prepare_dm(self):
+        """
+        Prepares the density matrix.
+        """
+        if self.dm is None:
+            self.dm = scf.hf.get_init_guess(self.__mol__)
+        self.dm *= self.domains_pattern(2)
+        self.dm *= self.__mol__.nelectron / (self.dm*self.get_ovlp(None, None)).sum()
+
+    def build(self):
+        """
+        Calculates ERI.
+        """
+        self.prepare_dm()
+        self.eri_j = {}
+        self.eri_k = {}
+        # Diagonal
+        for i, d in enumerate(self.domains):
+            self.eri_j[i, i] = d.eri
+            self.eri_k[i, i] = d.eri
+        # Off-diagonal
+        for i, d1 in enumerate(self.domains):
+            for j, d2 in enumerate(self.domains):
+                if j > i:
+                    self.eri_j[i, j] = self.get_eri(d1.atoms, d1.atoms, d2.atoms, d2.atoms)
+                    self.eri_j[j, i] = self.eri_j[i, j].transpose((2, 3, 0, 1))
+                    self.eri_k[i, j] = self.get_eri(d1.atoms, d2.atoms, d2.atoms, d1.atoms)
+                    self.eri_k[j, i] = self.eri_k[i, j].transpose((1, 0, 3, 2))
 
     def domains_cover(self, r=True):
         """
@@ -137,8 +206,8 @@ class DCHF(HFLocalIntegralProvider):
         Returns:
             True if domains cover all atoms.
         """
-        all_atoms = set(range(self.mol.natm))
-        covered_atoms = set(numpy.concatenate(tuple(i["domain"] for i in self.domains), axis=0))
+        all_atoms = set(range(self.__mol__.natm))
+        covered_atoms = set(numpy.concatenate(tuple(i.atoms for i in self.domains), axis=0))
         result = all_atoms == covered_atoms
         if not result and r:
             raise ValueError("Atoms "+",".join(list(
@@ -156,67 +225,83 @@ class DCHF(HFLocalIntegralProvider):
         """
         Updates domains' eigenstates and eigenvalues.
         """
-        for d in self.domains:
-            d["h"] = d["hcore"] + numpy.einsum("ijkl,kl->ij", d["eri_j"], self.dm) - 0.5*numpy.einsum("ijkl,jk->il", d["eri_k"], self.dm)
-            d["e"], d["psi"] = scipy.linalg.eigh(d["h"], d["ovlp"])
-            d["weights"] = numpy.einsum("ij,kj,ik,ik->j", d["psi"], d["psi"], d["ovlp"], d["partition_matrix"])
+        for i, d in enumerate(self.domains):
+            # d["h"] = d["hcore"] + numpy.einsum("ijkl,kl->ij", d["eri_j"], self.dm) - 0.5*numpy.einsum("ijkl,jk->il", d["eri_k"], self.dm)
+            d.h = d.hcore.copy()
+            for j, d2 in enumerate(self.domains):
+                dm = self.dm[d2.d2i] * d2.partition_matrix
+                d.h += numpy.einsum("ijkl,kl->ij", self.eri_j[i, j], dm) -\
+                       0.5*numpy.einsum("ijkl,jk->il", self.eri_k[i, j], dm)
+            # __h_test__ = d.hcore +\
+            #     numpy.einsum("ijkl,kl->ij", self.get_eri(d.atoms, d.atoms, None, None), self.dm) -\
+            #     0.5 * numpy.einsum("ijkl,jk->il", self.get_eri(d.atoms, None, None, d.atoms), self.dm)
+            # from numpy import testing
+            # testing.assert_allclose(d.h, __h_test__)
+            d.e, d.psi = scipy.linalg.eigh(d.h, d.ovlp)
+            # d["weights"] = numpy.einsum("ij,kj,ik,ik->j", d["psi"], d["psi"], d["ovlp"], d["partition_matrix"])
+            d.weights = numpy.einsum("ij,kj,ik,ik->j", d.psi, d.psi, d.ovlp, d.partition_matrix)
 
-    def update_dm(self):
+    def update_chemical_potential(self):
         """
-        Updates the density matrix.
-        Args:
-            distribution_function (func): a function of two arguments, the chemical potential and state energies
-            (array), returning an array of state occupations. Should be smooth and differentiable;
+        Calculates the chemical potential.
+        Returns:
+            The chemical potential.
         """
-        fock_energies = numpy.concatenate(list(i["e"] for i in self.domains), axis=0)
-        fock_energy_domain_ids = numpy.concatenate(list((j,)*len(i["e"]) for j, i in enumerate(self.domains)), axis=0)
-        fock_energy_state_ids = numpy.concatenate(list(numpy.arange(len(i["e"])) for i in self.domains), axis=0)
-        fock_energy_weights = numpy.concatenate(list(i["weights"] for i in self.domains), axis=0)
-
-        chemical_potential = scipy.optimize.minimize_scalar(
-            lambda x: ((self.distribution_function(x, self.temperature, fock_energies)*fock_energy_weights).sum()-self.mol.nelectron)**2,
+        fock_energies = numpy.concatenate(list(i.e for i in self.domains), axis=0)
+        fock_energy_weights = numpy.concatenate(list(i.weights for i in self.domains), axis=0)
+        self.mu = scipy.optimize.minimize_scalar(
+            lambda x: ((self.distribution_function(x, self.temperature, fock_energies)*fock_energy_weights).sum() - self.__mol__.nelectron) ** 2,
             bounds=(fock_energies.min(), fock_energies.max()),
         )["x"]
+        return self.mu
 
-        weights = self.distribution_function(chemical_potential, self.temperature, fock_energies)
+    def update_domain_dm(self):
+        """
+        Updates density matrixes of domains.
+        """
+        for domain in self.domains:
+            domain.occupations = self.distribution_function(self.mu, self.temperature, domain.e)
+            domain.dm = numpy.einsum("ij,j,kj->ik", domain.psi, domain.occupations, domain.psi)
+
+    def update_total_dm(self):
+        """
+        Updates the total density matrix.
+        Returns:
+            The maximal deviation from the previous density matrix.
+        """
         old_dm = self.dm
         self.dm = numpy.zeros_like(self.dm)
         self.hf_energy = 0
-        for did, sid, w in zip(fock_energy_domain_ids, fock_energy_state_ids, weights):
-            domain = self.domains[did]
-            psi = domain["psi"][:, sid]
-            pm = domain["partition_matrix"]
-            space = domain["basis"]
-            h = domain["h"]
-            hcore = domain["hcore"]
-            if "occupations" not in domain:
-                domain["occupations"] = numpy.zeros_like(domain["e"])
-
-            occupations = domain["occupations"]
-            occupations[sid] = w
-            dm = pm*numpy.outer(psi, psi)*w
-            self.dm[numpy.ix_(space, space)] += dm
-            self.hf_energy += 0.5*((h+hcore)*dm).sum()
+        for domain in self.domains:
+            masked_dm = domain.dm * domain.partition_matrix
+            self.dm[domain.d2i] += masked_dm
+            self.hf_energy += 0.5 * ((domain.h + domain.hcore) * masked_dm).sum()
 
         return abs(self.dm-old_dm).max()
 
-    def kernel(self, tolerance=1e-6, maxiter=100, temperature=300):
+    def kernel(self, tolerance=1e-6, maxiter=100):
         """
         Performs self-consistent iterations.
         Args:
-            tolerance (float): density matrix convergence criterion
-            TODO
+            tolerance (float): density matrix convergence criterion;
+            maxiter (int): maximal number of iterations;
 
         Returns:
             The converged energy value which is also stored as `self.hf_energy`.
         """
+        logger.info(self.__mol__, "Checking domain coverage ...")
         self.domains_cover(r=True)
+        logger.info(self.__mol__, "Calculating ERI blocks ...")
+        self.build()
         self.convergence_history = []
 
+        logger.info(self.__mol__, "Running self-consistent calculation ...")
         while True:
             self.update_domain_eigs()
-            delta = self.update_dm()
-            logger.info(self.mol, "  E = {:.10f} delta = {:.3e}".format(
+            self.update_chemical_potential()
+            self.update_domain_dm()
+            delta = self.update_total_dm()
+            logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e}".format(
                 self.hf_energy,
                 delta,
             ))
@@ -232,15 +317,123 @@ class DCHF(HFLocalIntegralProvider):
                 ))
 
 
+def energy_2(domains, w_occ, amplitude_calculator=None, with_t2=True):
+    """
+    Calculates the second-order energy correction in domain setup.
+    Args:
+        domains (iterable): a list of domains;
+        w_occ (float): a parameter splitting the second-order energy contributions between occupied and virtual
+        molecular orbitals;
+        amplitude_calculator (func): calculator of second-order amplitudes. If None, then MP2 amplitudes are calculated;
+        with_t2 (bool): whether to save amplitudes;
+
+    Returns:
+        The energy correction.
+    """
+    result = 0
+    if with_t2:
+        result_t2 = []
+    else:
+        result_t2 = None
+    for domain in domains:
+
+        occupations = domain.occupations
+        selection_occ = numpy.argwhere(occupations >= 1)[:, 0]
+        selection_virt = numpy.argwhere(occupations < 1)[:, 0]
+
+        psi = domain.psi
+        psi_occ = psi[:, selection_occ]
+        psi_virt = psi[:, selection_virt]
+
+        core_mask = numpy.diag(domain.partition_matrix)[:, numpy.newaxis]
+        psi_occ_core = psi_occ * core_mask
+        psi_virt_core = psi_virt * core_mask
+
+        __ov = common.transform(common.transform(domain.eri, psi_occ, axes=2), psi_virt, axes=3)
+        xvov = common.transform(common.transform(__ov, psi_occ_core, axes=0), psi_virt, axes=1)
+        oxov = common.transform(common.transform(__ov, psi_occ, axes=0), psi_virt_core, axes=1)
+
+        if amplitude_calculator is None:
+            e = domain.e
+            e_occ = e[selection_occ]
+            e_virt = e[selection_virt]
+
+            ovov = common.transform(common.transform(__ov, psi_occ, axes=0), psi_virt, axes=1)
+            t1 = None
+            t2 = ovov / (
+                e_occ[:, numpy.newaxis, numpy.newaxis, numpy.newaxis] -
+                e_virt[numpy.newaxis, :, numpy.newaxis, numpy.newaxis] +
+                e_occ[numpy.newaxis, numpy.newaxis, :, numpy.newaxis] -
+                e_virt[numpy.newaxis, numpy.newaxis, numpy.newaxis, :]
+            )
+        else:
+            t1, t2 = amplitude_calculator(domain)
+
+        amplitudes = 0
+        if t2 is not None:
+            amplitudes = t2
+        if t1 is not None:
+            amplitudes += numpy.einsum("ia,jb->iajb", t1, t1)
+
+        if amplitudes is not 0:
+            result += ((xvov * w_occ + oxov * (1.0 - w_occ)) * (2 * amplitudes - numpy.swapaxes(amplitudes, 0, 2))).sum()
+        if result_t2 is not None:
+            result_t2.append(amplitudes)
+
+    return result, result_t2
+
+
+def pyscf_mp2_amplitude_calculator(domain):
+    """
+    Calculates MP2 amplitudes in the domain.
+    Args:
+        domain (Domain): a domain to calculate at;
+
+    Returns:
+        MP2 amplitudes.
+    """
+    mf = scf.RHF(domain.mol)
+    mf.build(domain.mol)
+    mf.mo_coeff = domain.psi
+    mf.mo_energy = domain.e
+    mf.mo_occ = domain.occupations
+    domain_mp2 = mp.MP2(mf)
+    domain_mp2.kernel()
+    return None, domain_mp2.t2.swapaxes(1, 2)
+
+
+def pyscf_ccsd_amplitude_calculator(domain):
+    """
+    Calculates CCSD amplitudes in the domain.
+    Args:
+        domain (Domain): a domain to calculate at;
+
+    Returns:
+        CCSD amplitudes.
+    """
+    mf = scf.RHF(domain.mol)
+    mf.build(domain.mol)
+    mf.mo_coeff = domain.psi
+    mf.mo_energy = domain.e
+    mf.mo_occ = domain.occupations
+    domain_ccsd = cc.CCSD(mf)
+    domain_ccsd.kernel()
+    return domain_ccsd.t1, domain_ccsd.t2.swapaxes(1, 2)
+
+
 class DCMP2(object):
     def __init__(self, dchf, w_occ=1):
         """
         An implementation of the divide-conquer MP2 on top of the divide-conquer Hartree-Fock.
         Args:
             dchf (DCHF): a completed divide-conquer Hartree-Fock calculation
+            w_occ (float): a parameter splitting the second-order energy contributions between occupied and virtual
+            molecular orbitals;
         """
         self.mf = dchf
         self.w_occ = w_occ
+
+        self.e2 = self.t2 = None
 
     def kernel(self):
         """
@@ -248,34 +441,27 @@ class DCMP2(object):
         Returns:
             DC-MP2 energy correction.
         """
-        e2 = 0
-        for domain in self.mf.domains:
-            occupations = domain["occupations"]
-            selection_occ = numpy.argwhere(occupations >= 1)[:, 0]
-            selection_virt = numpy.argwhere(occupations < 1)[:, 0]
+        self.e2, self.t2 = energy_2(self.mf.domains, self.w_occ)
+        return self.e2, self.t2
 
-            psi = domain["psi"]
-            psi_occ = psi[:, selection_occ]
-            psi_virt = psi[:, selection_virt]
 
-            e = domain["e"]
-            e_occ = e[selection_occ]
-            e_virt = e[selection_virt]
+class DCCCSD(DCMP2):
+    def __init__(self, dchf, w_occ=1):
+        """
+        An implementation of the divide-conquer CCSD on top of the divide-conquer Hartree-Fock.
+        Args:
+            dchf (DCHF): a completed divide-conquer Hartree-Fock calculation
+            w_occ (float): a parameter splitting the second-order energy contributions between occupied and virtual
+            molecular orbitals;
+        """
+        DCMP2.__init__(self, dchf, w_occ=w_occ)
+        self.e1 = self.t1 = None
 
-            domain_atoms = domain["domain"]
-            eri = self.mf.get_eri(domain_atoms, domain_atoms, domain_atoms, domain_atoms).swapaxes(1, 2)
-            xoxv = common.transform(common.transform(eri, psi_occ, axes=1), psi_virt, axes=3)
-            oovv = common.transform(common.transform(xoxv, psi_occ, axes=0), psi_virt, axes=2)
-            t2 = oovv / (
-                e_occ[:, numpy.newaxis, numpy.newaxis, numpy.newaxis] +
-                e_occ[numpy.newaxis, :, numpy.newaxis, numpy.newaxis] -
-                e_virt[numpy.newaxis, numpy.newaxis, :, numpy.newaxis] -
-                e_virt[numpy.newaxis, numpy.newaxis, numpy.newaxis, :]
-            )
-            core_mask = numpy.diag(domain["partition_matrix"])
-            xovv = common.transform(common.transform(xoxv, psi_occ*core_mask[:, numpy.newaxis], axes=0), psi_virt, axes=2)
-            ooxv = common.transform(common.transform(xoxv, psi_occ, axes=0), psi_virt*core_mask[:, numpy.newaxis], axes=2)
-
-            e2 += ((xovv*self.w_occ + ooxv*(1.0-self.w_occ))*(2*t2 - numpy.swapaxes(t2, 0, 1))).sum()
-        self.e2 = e2
+    def kernel(self):
+        """
+        Calculates DC-CCSD energy and amplitudes.
+        Returns:
+            DC-CCSD energy correction.
+        """
+        self.e2, self.t2 = energy_2(self.mf.domains, self.w_occ, amplitude_calculator=pyscf_ccsd_amplitude_calculator)
 
