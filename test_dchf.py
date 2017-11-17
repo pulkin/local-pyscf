@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from pyscf import scf, mp
+from pyscf import scf, mp, cc
 import dchf
 
 import numpy
@@ -9,33 +9,60 @@ from numpy import testing
 from test_common import helium_chain, hydrogen_dimer_chain
 
 
-def assign_domains(dchf, domain_size, buffer_size):
+def assign_domains(dchf, domain_size, buffer_size, reset_dm=True):
     """
     Assigns domains given the size of the domain core region and buffer region.
     Args:
         dchf (dchf.DCHF): divide-conquer Hartree-Fock setup;
         domain_size (int): size of domains' cores;
         buffer_size (int): size of the domains' buffer regions
+        reset_dm (bool): resets the density matrix;
     """
+    if reset_dm:
+        dchf.dm = None
     dchf.domains_erase()
-    for i in range(0, dchf.mol.natm, domain_size):
+    for i in range(0, dchf.__mol__.natm, domain_size):
         dchf.add_domain(numpy.arange(
             max(i - buffer_size, 0),
-            min(i + domain_size + buffer_size, dchf.mol.natm),
-        ), domain_core=numpy.arange(i, min(i + domain_size, dchf.mol.natm)))
+            min(i + domain_size + buffer_size, dchf.__mol__.natm),
+        ), core=numpy.arange(i, min(i + domain_size, dchf.__mol__.natm)))
 
 
 class HydrogenChainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Solve HF
         cls.h6chain = hydrogen_dimer_chain(6)
         cls.h6mf = scf.RHF(cls.h6chain)
         cls.h6mf.kernel()
-
         cls.total_energy = cls.h6mf.e_tot - cls.h6mf.energy_nuc()
         cls.dm = cls.h6mf.make_rdm1()
 
-        cls.h6dchf = dchf.DCHF(cls.h6chain)
+        # Solve MP2
+        cls.h6mp2 = mp.MP2(cls.h6mf)
+        cls.h6mp2.kernel()
+
+        # Solve CCSD
+        cls.h6ccsd = cc.CCSD(cls.h6mf)
+        cls.h6ccsd.kernel()
+
+        # Single-domain DCHF
+        cls.h6dchf_1 = dchf.DCHF(cls.h6chain)
+        assign_domains(cls.h6dchf_1, 6, 0)
+        cls.h6dchf_1.kernel()
+        cls.h6dcmp2_1 = dchf.DCMP2(cls.h6dchf_1)
+        cls.h6dcmp2_1.kernel()
+        cls.h6dcccsd_1 = dchf.DCCCSD(cls.h6dchf_1)
+        cls.h6dcccsd_1.kernel()
+
+        # Three-domain DCHF
+        cls.h6dchf_3 = dchf.DCHF(cls.h6chain)
+        assign_domains(cls.h6dchf_3, 2, 2)
+        cls.h6dchf_3.kernel()
+        cls.h6dcmp2_3 = dchf.DCMP2(cls.h6dchf_3)
+        cls.h6dcmp2_3.kernel()
+        cls.h6dcccsd_3 = dchf.DCCCSD(cls.h6dchf_3)
+        cls.h6dcccsd_3.kernel()
 
     def test_fock(self):
         """
@@ -44,8 +71,8 @@ class HydrogenChainTest(unittest.TestCase):
         a1 = [1, 2]
         a2 = [1, 3, 4]
         testing.assert_allclose(
-            self.h6mf.get_fock(dm=self.dm)[self.h6dchf.get_block(a1, a2)],
-            self.h6dchf.get_fock(self.dm, a1, a2),
+            self.h6mf.get_fock(dm=self.dm)[self.h6dchf_1.get_block(a1, a2)],
+            self.h6dchf_1.get_fock(self.dm, a1, a2),
             atol=1e-14,
         )
 
@@ -53,7 +80,7 @@ class HydrogenChainTest(unittest.TestCase):
         """
         Tests exact orbital energies.
         """
-        e, _ = self.h6dchf.get_orbs(self.dm, None)
+        e, _ = self.h6dchf_1.get_orbs(self.dm, None)
         testing.assert_allclose(e, self.h6mf.mo_energy, rtol=1e-4)
 
     def test_util(self):
@@ -61,23 +88,47 @@ class HydrogenChainTest(unittest.TestCase):
         Test utility functions.
         """
         t = dchf.DCHF(self.h6chain)
-        t.add_domain([0, 1], domain_core=[0, 1])
+        t.add_domain([0, 1], core=[0, 1])
         with self.assertRaises(ValueError):
             t.domains_cover(r=True)
 
-    def test_iter(self):
+    def test_hf_single_domain(self):
         """
-        Tests DCHF iterations.
+        A single-domain HF test.
         """
-        assign_domains(self.h6dchf, 2, 2)
-        e = self.h6dchf.kernel()
-        testing.assert_allclose(self.h6dchf.dm, self.dm, atol=1e-2)
-        testing.assert_allclose(self.h6mf.e_tot-self.h6chain.energy_nuc(), e, rtol=1e-4)
+        testing.assert_allclose(self.h6dchf_1.dm, self.dm, atol=1e-6)
+        testing.assert_allclose(self.h6dchf_1.hf_energy, self.total_energy, rtol=1e-8)
 
-        mp2 = dchf.DCMP2(self.h6dchf)
-        mp2.kernel()
-        e_ref, _ = mp.MP2(self.h6mf).kernel()
-        testing.assert_allclose(e_ref, mp2.e2, atol=1e-4)
+    def test_mp2_single_domain(self):
+        """
+        A single-domain MP2 test.
+        """
+        testing.assert_allclose(self.h6dcmp2_1.e2, self.h6mp2.e_corr, atol=1e-8)
+
+    def test_ccsd_single_domain(self):
+        """
+        A single-domain CCSD test.
+        """
+        testing.assert_allclose(self.h6dcccsd_1.e2, self.h6ccsd.e_corr, atol=1e-8)
+
+    def test_hf(self):
+        """
+        HF test.
+        """
+        testing.assert_allclose(self.h6dchf_3.dm, self.dm, atol=1e-2)
+        testing.assert_allclose(self.h6dchf_3.hf_energy, self.total_energy, rtol=1e-4)
+
+    def test_mp2(self):
+        """
+        MP2 test.
+        """
+        testing.assert_allclose(self.h6dcmp2_3.e2, self.h6mp2.e_corr, atol=1e-4)
+
+    def test_ccsd(self):
+        """
+        CCSD test.
+        """
+        testing.assert_allclose(self.h6dcccsd_3.e2, self.h6ccsd.e_corr, atol=1e-3)
 
 
 class HydrogenChain12Test(unittest.TestCase):
@@ -118,7 +169,7 @@ class HeliumChainTest(unittest.TestCase):
         cls.he10mp2.kernel()
 
         cls.he10dchf = dchf.DCHF(cls.he10chain)
-        assign_domains(cls.he10dchf, 1, 3)
+        assign_domains(cls.he10dchf, 1, 1)
         cls.he10dchf.kernel()
         cls.he10dcmp2 = dchf.DCMP2(cls.he10dchf)
         cls.he10dcmp2.kernel()
