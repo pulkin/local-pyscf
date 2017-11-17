@@ -55,7 +55,7 @@ class DummyIntegralProvider(common.AbstractIntegralProvider):
         Returns:
             A rectangular matrix with overlap integral values.
         """
-        return self.mol.intor_symmetric('int1e_ovlp')[self.get_block(atoms1, atoms2)]
+        return self.__mol__.intor_symmetric('int1e_ovlp')[self.get_block(atoms1, atoms2)]
 
     def get_kin(self, atoms1, atoms2):
         """
@@ -67,7 +67,7 @@ class DummyIntegralProvider(common.AbstractIntegralProvider):
         Returns:
             A rectangular matrix with kinetic energy matrix values.
         """
-        return self.mol.intor_symmetric('int1e_kin')[self.get_block(atoms1, atoms2)]
+        return self.__mol__.intor_symmetric('int1e_kin')[self.get_block(atoms1, atoms2)]
 
     def get_ext_pot(self, atoms1, atoms2):
         """
@@ -79,7 +79,7 @@ class DummyIntegralProvider(common.AbstractIntegralProvider):
         Returns:
             A rectangular matrix with external potential matrix values.
         """
-        return self.mol.intor_symmetric('int1e_nuc')[self.get_block(atoms1, atoms2)]
+        return self.__mol__.intor_symmetric('int1e_nuc')[self.get_block(atoms1, atoms2)]
 
     def get_hcore(self, atoms1, atoms2):
         """
@@ -105,7 +105,7 @@ class DummyIntegralProvider(common.AbstractIntegralProvider):
         Returns:
             A four-index tensor with ERIs belonging to a given subset of atoms.
         """
-        eri = self.mol.intor('int2e_sph').view()
+        eri = self.__mol__.intor('int2e_sph').view()
         n = int(eri.shape[0]**.5)
         eri.shape = (n,)*4
         return eri[self.get_block(atoms1, atoms2, atoms3, atoms4)]
@@ -137,3 +137,43 @@ class HydrogenChainTest(unittest.TestCase):
         Tests electron repulsion integrals.
         """
         testing.assert_allclose(self.h6ip.get_eri([0], [1, 2], [1, 3], [4, 5]), self.h6dip.get_eri([0], [1, 2], [1, 3], [4, 5]))
+
+
+class ThresholdTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.h6chain = atomic_chain(6, alt_spacing=2.3)
+        cls.t = 1e-5
+        cls.h6ip = common.IntegralProvider(cls.h6chain)
+        cls.h6dip = DummyIntegralProvider(cls.h6chain)
+        cls.sparse = common.get_sparse_eri(cls.h6ip, threshold=cls.t)
+
+    def test_eri(self):
+        """
+        Tests electron repulsion integrals.
+        """
+        t1 = False
+        t2 = False
+        for q in (
+                (0, 0, 0, 0),
+                (0, 1, 0, 1),
+                (0, 0, 0, 4),
+                (3, 3, 3, 3),
+                (0, 1, 2, 3),
+                (0, 1, 3, 2),
+                (1, 0, 2, 3),
+                (1, 0, 3, 2),
+                (2, 3, 0, 1),
+                (2, 3, 1, 0),
+                (3, 2, 0, 1),
+                (3, 2, 1, 0),
+        ):
+            if q in self.sparse:
+                testing.assert_allclose(self.sparse[q], self.h6dip.get_eri(*q), atol=self.t)
+                t1 = True
+            else:
+                testing.assert_allclose(self.h6dip.get_eri(*q), 0, atol=self.t)
+                t2 = True
+
+        assert t1
+        assert t2
