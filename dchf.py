@@ -117,6 +117,7 @@ class Domain(object):
 
         self.mol = provider.__mol__.copy()
         self.mol._bas = numpy.concatenate(tuple(self.mol._bas[start:end] for start, end in self.shell_ranges), axis=0)
+        self.mol.nelectron = self.mol.atom_charges()[self.atoms, ].sum()
 
 
 class DCHF(HFLocalIntegralProvider):
