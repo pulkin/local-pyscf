@@ -264,19 +264,33 @@ class DCHF(HFLocalIntegralProvider):
             # d["weights"] = numpy.einsum("ij,kj,ik,ik->j", d["psi"], d["psi"], d["ovlp"], d["partition_matrix"])
             d.weights = numpy.einsum("ij,kj,ik,ik->j", d.psi, d.psi, d.ovlp, d.partition_matrix)
 
-    def update_chemical_potential(self):
+    def update_chemical_potential(self, threshold=1e-8):
         """
         Calculates the chemical potential.
+        Args:
+            threshold (float): maximal allowed deviation from the expected electron number;
         Returns:
             The chemical potential.
         """
         fock_energies = numpy.concatenate(list(i.e for i in self.domains), axis=0)
         fock_energy_weights = numpy.concatenate(list(i.weights for i in self.domains), axis=0)
-        self.mu = scipy.optimize.minimize_scalar(
-            lambda x: ((self.distribution_function(x, self.temperature, fock_energies)*fock_energy_weights).sum() - self.__mol__.nelectron) ** 2,
-            bounds=(fock_energies.min(), fock_energies.max()),
-        )["x"]
-        return self.mu
+
+        def n_electron(mu):
+            return (self.distribution_function(mu, self.temperature, fock_energies)*fock_energy_weights).sum()
+
+        top = fock_energies.max()
+        bottom = fock_energies.min()
+        for i in range(100):
+            middle = 0.5*(top+bottom)
+            n = n_electron(middle)
+            if (n-self.__mol__.nelectron) <= threshold:
+                self.mu = middle
+                return middle
+            elif n > self.__mol__.nelectron:
+                top = middle
+            else:
+                bottom = middle
+        raise ValueError("Failed to determine the chemical potential")
 
     def update_domain_dm(self):
         """
