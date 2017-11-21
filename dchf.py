@@ -317,13 +317,16 @@ class DCHF(HFLocalIntegralProvider):
         """
         if dm_hook == "diis":
             logger.info(self.__mol__, "Initializing DIIS ...")
-            d = diis.DIIS()
+            __diis__ = diis.DIIS()
 
             def dm_hook(dchf):
-                return d.update(dchf.dm)
+                return __diis__.update(dchf.dm)
 
         logger.info(self.__mol__, "Checking domain coverage ...")
         self.domains_cover(r=True)
+        logger.info(self.__mol__, "Domains configuration:")
+        for d in self.domains:
+            logger.info(self.__mol__, "  "+repr(list(d.atoms)))
         logger.info(self.__mol__, "Calculating ERI blocks ...")
         self.build()
         self.convergence_history = []
