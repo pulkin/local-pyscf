@@ -1,5 +1,5 @@
 from pyscf import scf, mp, cc
-from pyscf.lib import logger
+from pyscf.lib import logger, diis
 
 import numpy
 import scipy
@@ -296,16 +296,26 @@ class DCHF(HFLocalIntegralProvider):
 
         return abs(self.dm-old_dm).max()
 
-    def kernel(self, tolerance=1e-6, maxiter=100):
+    def kernel(self, tolerance=1e-6, maxiter=100, dm_hook="diis"):
         """
         Performs self-consistent iterations.
         Args:
             tolerance (float): density matrix convergence criterion;
             maxiter (int): maximal number of iterations;
+            dm_hook (func): a hook called right after the density matrix was updated. It is called with a single
+            argument, self, and return a new density matrix. It is allowed to not return anything. A special value
+            "diis" stands for `pyscf.diis.DIIS.update` with an adjusted input.
 
         Returns:
             The converged energy value which is also stored as `self.hf_energy`.
         """
+        if dm_hook == "diis":
+            logger.info(self.__mol__, "Initializing DIIS ...")
+            d = diis.DIIS()
+
+            def dm_hook(dchf):
+                return d.update(dchf.dm)
+
         logger.info(self.__mol__, "Checking domain coverage ...")
         self.domains_cover(r=True)
         logger.info(self.__mol__, "Calculating ERI blocks ...")
@@ -318,6 +328,10 @@ class DCHF(HFLocalIntegralProvider):
             self.update_chemical_potential()
             self.update_domain_dm()
             delta = self.update_total_dm()
+            if dm_hook is not None:
+                result = dm_hook(self)
+                if not result is None:
+                    self.dm = result
             logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e}".format(
                 self.hf_energy,
                 delta,
