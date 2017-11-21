@@ -4,7 +4,7 @@ from pyscf import scf, mp
 
 import dchf
 from test_common import hydrogen_dimer_chain
-from test_dchf import assign_domains
+from test_dchf import assign_chain_domains
 
 import fake
 pyplot = fake.pyplot()
@@ -41,7 +41,7 @@ for wocc in (1, 0.5, 0):
             hf = mf_cache[c]
         else:
             hf = dchf.DCHF(model)
-            assign_domains(hf, *c)
+            assign_chain_domains(hf, *c)
             hf.kernel(tolerance=1e-12, maxiter=30)
             mf_cache[c] = hf
 

@@ -6,7 +6,7 @@ from pyscf import scf
 
 import dchf
 from test_common import helium_chain, hydrogen_dimer_chain
-from test_dchf import assign_domains
+from test_dchf import assign_chain_domains
 
 import fake
 pyplot = fake.pyplot()
@@ -20,9 +20,9 @@ plot_chain_size_range = numpy.array([1, 2*max(chain_size)])
 def setup(model):
     hf = dchf.DCHF(model)
     if model.atom[0][0] == "He":
-        assign_domains(hf, 1, 0)
+        assign_chain_domains(hf, 1, 0)
     elif model.atom[0][0] == "H":
-        assign_domains(hf, 4, 2)
+        assign_chain_domains(hf, 4, 2)
     else:
         raise ValueError("Model not recognized")
     return hf
@@ -30,7 +30,7 @@ def setup(model):
 
 def setup_full(model):
     hf = dchf.DCHF(model)
-    assign_domains(hf, model.natm, 0)
+    assign_chain_domains(hf, model.natm, 0)
     return hf
 
 

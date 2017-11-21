@@ -2,7 +2,7 @@ from pyscf import scf
 
 import dchf
 from test_common import helium_chain, hydrogen_dimer_chain, hydrogen_distant_dimer_chain
-from test_dchf import assign_domains
+from test_dchf import assign_chain_domains
 
 import fake
 pyplot = fake.pyplot()
@@ -13,7 +13,7 @@ maxiter = 30
 
 def calculate(model, domain_size, buffer_size=0):
     hf = dchf.DCHF(model)
-    assign_domains(hf, domain_size, buffer_size)
+    assign_chain_domains(hf, domain_size, buffer_size)
 
     # Since the convergence criterion is never met an exception will be raised
     try:

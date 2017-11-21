@@ -4,7 +4,7 @@ from pyscf import scf
 
 import dchf
 from test_common import hydrogen_dimer_chain
-from test_dchf import assign_domains
+from test_dchf import assign_chain_domains
 
 import fake
 pyplot = fake.pyplot()
@@ -31,7 +31,7 @@ for domain_size in [2, 4, 6, 8, 12, 24]:
 
         t = time.time()
         hf = dchf.DCHF(model)
-        assign_domains(hf, domain_size, buffer_size)
+        assign_chain_domains(hf, domain_size, buffer_size)
         hf.kernel(tolerance=1e-12, maxiter=30)
         times.append(time.time()-t)
 

@@ -9,7 +9,7 @@ from numpy import testing
 from test_common import helium_chain, hydrogen_dimer_chain
 
 
-def assign_domains(dchf, domain_size, buffer_size, reset_dm=True):
+def assign_chain_domains(dchf, domain_size, buffer_size, reset_dm=True):
     """
     Assigns domains given the size of the domain core region and buffer region.
     Args:
@@ -48,7 +48,7 @@ class HydrogenChainTest(unittest.TestCase):
 
         # Single-domain DCHF
         cls.h6dchf_1 = dchf.DCHF(cls.h6chain)
-        assign_domains(cls.h6dchf_1, 6, 0)
+        assign_chain_domains(cls.h6dchf_1, 6, 0)
         cls.h6dchf_1.kernel()
         cls.h6dcmp2_1 = dchf.DCMP2(cls.h6dchf_1)
         cls.h6dcmp2_1.kernel()
@@ -57,7 +57,7 @@ class HydrogenChainTest(unittest.TestCase):
 
         # Three-domain DCHF
         cls.h6dchf_3 = dchf.DCHF(cls.h6chain)
-        assign_domains(cls.h6dchf_3, 2, 2)
+        assign_chain_domains(cls.h6dchf_3, 2, 2)
         cls.h6dchf_3.kernel()
         cls.h6dcmp2_3 = dchf.DCMP2(cls.h6dchf_3)
         cls.h6dcmp2_3.kernel()
@@ -147,7 +147,7 @@ class HydrogenChain12Test(unittest.TestCase):
         """
         Tests DCHF iterations.
         """
-        assign_domains(self.h12dchf, 4, 2)
+        assign_chain_domains(self.h12dchf, 4, 2)
         e = self.h12dchf.kernel(tolerance=1e-9)
         testing.assert_allclose(self.h12dchf.dm, self.dm, atol=1e-2)
         testing.assert_allclose(self.h12mf.e_tot - self.h12chain.energy_nuc(), e, rtol=1e-4)
@@ -169,7 +169,7 @@ class HeliumChainTest(unittest.TestCase):
         cls.he10mp2.kernel()
 
         cls.he10dchf = dchf.DCHF(cls.he10chain)
-        assign_domains(cls.he10dchf, 1, 1)
+        assign_chain_domains(cls.he10dchf, 1, 1)
         cls.he10dchf.kernel()
         cls.he10dcmp2 = dchf.DCMP2(cls.he10dchf)
         cls.he10dcmp2.kernel()
