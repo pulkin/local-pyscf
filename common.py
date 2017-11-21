@@ -1,7 +1,9 @@
 import itertools
 
-import numpy
 from pyscf import gto
+from pyscf.lib import diis
+
+import numpy
 from scipy import special
 
 
@@ -399,3 +401,15 @@ def gaussian_distribution(chemical_potential, temperature, energies):
     """
     return 1 - special.erf((energies-chemical_potential)/temperature)
 
+
+class DictDIIS(diis.DIIS):
+    @staticmethod
+    def __plain__(self):
+        raise NotImplemented
+
+    def update(self, x, xerr=None):
+        if not isinstance(x, dict):
+            raise ValueError("Input is not a dict")
+        if xerr is not None and not isinstance(xerr, dict):
+            raise ValueError("The error estimate is not a dict")
+        raise NotImplemented
