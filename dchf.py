@@ -7,6 +7,8 @@ from scipy import cluster
 
 import common
 
+from warnings import warn
+
 
 class HFLocalIntegralProvider(common.IntegralProvider):
     def get_j(self, dm, atoms1, atoms2, atoms3=None, atoms4=None):
@@ -160,7 +162,10 @@ class DCHF(HFLocalIntegralProvider):
             partition_matrix (numpy.ndarray): partition matrix for this domain;
             core (list, tuple): atoms included in the core of this domain;
         """
-        self.domains.append(Domain(domain, self, partition_matrix=partition_matrix, core=core))
+        d = Domain(domain, self, partition_matrix=partition_matrix, core=core)
+        if d.mol.nelectron % 2 == 1:
+            warn("The number of electrons in the domain added is odd. Convergence may be difficult")
+        self.domains.append(d)
 
     def domains_auto(self, n, **kwargs):
         """
