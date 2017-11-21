@@ -3,6 +3,7 @@ from pyscf.lib import logger
 
 import numpy
 import scipy
+from scipy import cluster
 
 import common
 
@@ -144,6 +145,12 @@ class DCHF(HFLocalIntegralProvider):
         self.convergence_history = []
         self.eri_j = self.eri_k = None
 
+    def domains_erase(self):
+        """
+        Erases all domain information.
+        """
+        self.domains = []
+
     def add_domain(self, domain, partition_matrix=None, core=None):
         """
         Adds a domain.
@@ -153,6 +160,22 @@ class DCHF(HFLocalIntegralProvider):
             core (list, tuple): atoms included in the core of this domain;
         """
         self.domains.append(Domain(domain, self, partition_matrix=partition_matrix, core=core))
+
+    def domains_auto(self, n, **kwargs):
+        """
+        Splits into domains based on K-means clustering as implemented in scipy.
+        Args:
+            n (int): the number of domains;
+            **kwargs: keyword arguments to scipy.cluster.vq.kmeans2
+        """
+        default = dict(
+            minit="points",
+        )
+        default.update(kwargs)
+        coordinates = self.__mol__.atom_coords()
+        centroids, labels = cluster.vq.kmeans2(cluster.vq.whiten(coordinates), n, **default)
+        for i in range(n):
+            self.add_domain(numpy.argwhere(numpy.array(labels) == i)[:, 0])
 
     def domains_pattern(self, n):
         """
@@ -214,12 +237,6 @@ class DCHF(HFLocalIntegralProvider):
                 "{:d}".format(i) for i in (all_atoms - covered_atoms)
             ))+" are not covered by any domain")
         return result
-
-    def domains_erase(self):
-        """
-        Erases all domain information.
-        """
-        self.domains = []
 
     def update_domain_eigs(self):
         """
