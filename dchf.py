@@ -341,9 +341,10 @@ class DCHF(HFLocalIntegralProvider):
                 result = dm_hook(self)
                 if not result is None:
                     self.dm = result
-            logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e}".format(
+            logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e} mu = {:.10f}".format(
                 self.hf_energy,
                 delta,
+                self.mu
             ))
             self.convergence_history.append(delta)
             if delta < tolerance:
