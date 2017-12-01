@@ -1,6 +1,6 @@
 import time
 
-from pyscf import scf, mp
+from pyscf import scf
 
 import dchf
 from test_common import hydrogen_dimer_chain
@@ -14,10 +14,7 @@ model = hydrogen_dimer_chain(N)
 ref_hf = scf.RHF(model)
 ref_hf.conv_tol = 1e-12
 ref_hf.kernel()
-
-ref_mp2 = mp.MP2(ref_hf)
-ref_mp2.kernel()
-ref_e = ref_hf.e_tot - model.energy_nuc() + ref_mp2.emp2
+ref_e = ref_hf.e_tot
 
 times = []
 titles = []
@@ -33,22 +30,17 @@ for domain_size in [2, 4, 6, 8, 12, 24]:
         print "  buff={:d}".format(buffer_size)
 
         t = time.time()
-
         hf = dchf.DCHF(model)
         assign_chain_domains(hf, domain_size, buffer_size)
-        hf.kernel(tolerance=1e-12, maxiter=30)
+        hf.kernel(tolerance=1e-9, maxiter=30)
+        t = time.time()-t
+        times.append(t)
 
-        mp = dchf.DCMP2(hf)
-        mp.kernel()
-
-        times.append(time.time()-t)
-
-        error = abs(ref_e - hf.hf_energy - mp.e2)
+        error = abs(ref_e - hf.e_tot)
 
         titles.append("{:d}({:d})".format(domain_size, buffer_size))
         errors.append(error)
         y.append(error)
-        print "    result: {:.3e}".format(error)
 
         if buffer_size+domain_size >= N:
             break
@@ -62,6 +54,7 @@ pyplot.legend()
 
 pyplot.subplot(122)
 pyplot.semilogy(times, errors, marker="o", ls="None", label="domain size (core size)")
+pyplot.axvline(x=t, ls="--")
 for x, y, t in zip(times, errors, titles):
     pyplot.annotate(
         t, xy=(x, y), xytext=(5, 0), textcoords='offset points', ha='left', va='center',

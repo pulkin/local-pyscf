@@ -13,7 +13,6 @@ Contents:
 
    lmp2
    dchf
-   dchf-mp2
 
 
 Indices and tables

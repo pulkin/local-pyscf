@@ -1,5 +1,13 @@
 import os
 import inspect
+import numpy
+import json
+
+
+def p(x):
+    if isinstance(x, numpy.ndarray):
+        x = x.tolist()
+    return json.dumps(x)
 
 
 class LogCalls(object):
@@ -29,8 +37,8 @@ class LogCalls(object):
                         line_start=self.line_start,
                         caller=i["__method_name__"],
                         arguments=", ".join(
-                            ([", ".join(repr(j) for j in i["__args__"])] if len(i["__args__"]) > 0 else []) +\
-                            ([", ".join(j+"="+repr(k) for j, k in i["__kwargs__"].items())] if len(i["__kwargs__"]) > 0 else [])
+                            ([", ".join(p(j) for j in i["__args__"])] if len(i["__args__"]) > 0 else []) +\
+                            ([", ".join(j+"="+p(k) for j, k in i["__kwargs__"].items())] if len(i["__kwargs__"]) > 0 else [])
                         )
                     ) for i in self.items),
                     self.tail,
