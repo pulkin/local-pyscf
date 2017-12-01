@@ -137,13 +137,15 @@ class DCHF(HFLocalIntegralProvider):
         """
         super(DCHF, self).__init__(mol)
         self.distribution_function = distribution_function
-        self.temperature = temperature*8.621738e-5
+        self.__temperature__ = temperature * 8.621738e-5
         self.eri_threshold = eri_threshold
 
         self.domains = []
 
         self.dm = None
+        self.ovlp = None
         self.hf_energy = None
+        self.e_tot = None
         self.mu = None
         self.convergence_history = []
         self.eri_j = self.eri_k = None
@@ -167,22 +169,6 @@ class DCHF(HFLocalIntegralProvider):
             warn("The number of electrons in the domain added is odd. Convergence may be difficult")
         self.domains.append(d)
 
-    def domains_auto(self, n, **kwargs):
-        """
-        Splits into domains based on K-means clustering as implemented in scipy.
-        Args:
-            n (int): the number of domains;
-            **kwargs: keyword arguments to scipy.cluster.vq.kmeans2
-        """
-        default = dict(
-            minit="points",
-        )
-        default.update(kwargs)
-        coordinates = self.__mol__.atom_coords()
-        centroids, labels = cluster.vq.kmeans2(cluster.vq.whiten(coordinates), n, **default)
-        for i in range(n):
-            self.add_domain(numpy.argwhere(numpy.array(labels) == i)[:, 0])
-
     def domains_pattern(self, n):
         """
         Calculates a domain pattern.
@@ -203,8 +189,9 @@ class DCHF(HFLocalIntegralProvider):
         """
         if self.dm is None:
             self.dm = scf.hf.get_init_guess(self.__mol__)
+        self.ovlp = self.get_ovlp(None, None)
         self.dm *= self.domains_pattern(2)
-        self.dm *= self.__mol__.nelectron / (self.dm*self.get_ovlp(None, None)).sum()
+        self.dm *= self.__mol__.nelectron / (self.dm*self.ovlp).sum()
 
     def build(self):
         """
@@ -249,22 +236,15 @@ class DCHF(HFLocalIntegralProvider):
         Updates domains' eigenstates and eigenvalues.
         """
         for i, d in enumerate(self.domains):
-            # d["h"] = d["hcore"] + numpy.einsum("ijkl,kl->ij", d["eri_j"], self.dm) - 0.5*numpy.einsum("ijkl,jk->il", d["eri_k"], self.dm)
             d.h = d.hcore.copy()
             for j, d2 in enumerate(self.domains):
                 dm = self.dm[d2.d2i] * d2.partition_matrix
                 d.h += numpy.einsum("ijkl,kl->ij", self.eri_j[i, j], dm) -\
                        0.5*numpy.einsum("ijkl,jk->il", self.eri_k[i, j], dm)
-            # __h_test__ = d.hcore +\
-            #     numpy.einsum("ijkl,kl->ij", self.get_eri(d.atoms, d.atoms, None, None), self.dm) -\
-            #     0.5 * numpy.einsum("ijkl,jk->il", self.get_eri(d.atoms, None, None, d.atoms), self.dm)
-            # from numpy import testing
-            # testing.assert_allclose(d.h, __h_test__)
             d.e, d.psi = scipy.linalg.eigh(d.h, d.ovlp)
-            # d["weights"] = numpy.einsum("ij,kj,ik,ik->j", d["psi"], d["psi"], d["ovlp"], d["partition_matrix"])
             d.weights = numpy.einsum("ij,kj,ik,ik->j", d.psi, d.psi, d.ovlp, d.partition_matrix)
 
-    def update_chemical_potential(self, threshold=1e-8):
+    def update_chemical_potential(self, threshold=1e-14):
         """
         Calculates the chemical potential.
         Args:
@@ -276,28 +256,29 @@ class DCHF(HFLocalIntegralProvider):
         fock_energy_weights = numpy.concatenate(list(i.weights for i in self.domains), axis=0)
 
         def n_electron(mu):
-            return (self.distribution_function(mu, self.temperature, fock_energies)*fock_energy_weights).sum()
+            return (self.distribution_function(mu, self.__temperature__, fock_energies) * fock_energy_weights).sum()
 
         top = fock_energies.max()
         bottom = fock_energies.min()
         for i in range(100):
             middle = 0.5*(top+bottom)
             n = n_electron(middle)
-            if (n-self.__mol__.nelectron) <= threshold:
+            d = abs(top-bottom)
+            if d <= threshold:
                 self.mu = middle
                 return middle
             elif n > self.__mol__.nelectron:
                 top = middle
             else:
                 bottom = middle
-        raise ValueError("Failed to determine the chemical potential")
+        raise ValueError("Failed to determine the chemical potential: error in chemical potential: {:.3e}".format(d))
 
     def update_domain_dm(self):
         """
         Updates density matrixes of domains.
         """
         for domain in self.domains:
-            domain.occupations = self.distribution_function(self.mu, self.temperature, domain.e)
+            domain.occupations = self.distribution_function(self.mu, self.__temperature__, domain.e)
             domain.dm = numpy.einsum("ij,j,kj->ik", domain.psi, domain.occupations, domain.psi)
 
     def update_total_dm(self):
@@ -313,6 +294,7 @@ class DCHF(HFLocalIntegralProvider):
             masked_dm = domain.dm * domain.partition_matrix
             self.dm[domain.d2i] += masked_dm
             self.hf_energy += 0.5 * ((domain.h + domain.hcore) * masked_dm).sum()
+        self.e_tot = self.hf_energy + self.__mol__.energy_nuc()
 
         return abs(self.dm-old_dm).max()
 
@@ -322,9 +304,10 @@ class DCHF(HFLocalIntegralProvider):
         Args:
             tolerance (float): density matrix convergence criterion;
             maxiter (int): maximal number of iterations;
-            dm_hook (func): a hook called right after the density matrix was updated. It is called with a single
-            argument, self, and return a new density matrix. It is allowed to not return anything. A special value
-            "diis" stands for `pyscf.diis.DIIS.update` with an adjusted input.
+
+            dm_hook (func): a hook called right after the density matrix was calculated. It is called with a single
+            argument, self, and should return a new density matrix. It is allowed to not return anything. A special
+            value "diis" stands for `pyscf.diis.DIIS.update` with an adjusted input;
 
         Returns:
             The converged energy value which is also stored as `self.hf_energy`.
@@ -332,6 +315,7 @@ class DCHF(HFLocalIntegralProvider):
         if dm_hook == "diis":
             logger.info(self.__mol__, "Initializing DIIS ...")
             __diis__ = diis.DIIS()
+            __diis__.space = 8
 
             def dm_hook(dchf):
                 return __diis__.update(dchf.dm)
@@ -353,13 +337,16 @@ class DCHF(HFLocalIntegralProvider):
             delta = self.update_total_dm()
             if dm_hook is not None:
                 result = dm_hook(self)
-                if not result is None:
+                if result is not None:
                     self.dm = result
             logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e} mu = {:.10f}".format(
-                self.hf_energy,
+                self.e_tot,
                 delta,
-                self.mu
+                self.mu,
             ))
+            logger.debug(self.__mol__, "    mo_energy =\n{}".format(
+                repr(numpy.sort(numpy.concatenate(list(i.e for i in self.domains), axis=0))))
+            )
             self.convergence_history.append(delta)
             if delta < tolerance:
                 return self.hf_energy
@@ -470,7 +457,7 @@ def pyscf_ccsd_amplitude_calculator(domain):
     mf.build(domain.mol)
     mf.mo_coeff = domain.psi
     mf.mo_energy = domain.e
-    mf.mo_occ = domain.occupations
+    mf.mo_occ = numpy.round(domain.occupations).astype(int)
     domain_ccsd = cc.CCSD(mf)
     domain_ccsd.kernel()
     return domain_ccsd.t1, domain_ccsd.t2.swapaxes(1, 2)
