@@ -237,8 +237,21 @@ def intor(mol, name, *shells, **kwargs):
         basis_size.append(sum(
             mol.bas_len_cart(i) for i in range(shls_slice[-2], shls_slice[-1])
         ))
-    kwargs["shls_slice"] = shls_slice
-    result = mol.intor(name, **kwargs).view()
+
+    if "do_not_hack_pyscf" in kwargs:
+        kwargs["shls_slice"] = shls_slice
+        result = mol.intor(name, **kwargs).view()
+
+    else:
+        bas = mol._bas
+        shells = sorted(set(sum((list(range(i, j)) for i, j in zip(shls_slice[::2], shls_slice[1::2])), [])))
+        mol._bas = mol._bas[shells, :]
+        shls_slice = tuple(numpy.searchsorted(shells, i) for i in shls_slice)
+
+        kwargs["shls_slice"] = shls_slice
+        result = mol.intor(name, **kwargs).view()
+
+        mol._bas = bas
     result.shape = tuple(basis_size)
     return result
 
@@ -401,15 +414,3 @@ def gaussian_distribution(chemical_potential, temperature, energies):
     """
     return 1 - special.erf((energies-chemical_potential)/temperature)
 
-
-class DictDIIS(diis.DIIS):
-    @staticmethod
-    def __plain__(self):
-        raise NotImplemented
-
-    def update(self, x, xerr=None):
-        if not isinstance(x, dict):
-            raise ValueError("Input is not a dict")
-        if xerr is not None and not isinstance(xerr, dict):
-            raise ValueError("The error estimate is not a dict")
-        raise NotImplemented
