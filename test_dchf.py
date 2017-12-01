@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from pyscf import scf, mp, cc
+from pyscf import scf, mp, cc, gto
 import dchf
 
 import numpy
@@ -49,7 +49,7 @@ class HydrogenChainTest(unittest.TestCase):
         # Single-domain DCHF
         cls.h6dchf_1 = dchf.DCHF(cls.h6chain)
         assign_chain_domains(cls.h6dchf_1, 6, 0)
-        cls.h6dchf_1.kernel()
+        cls.h6dchf_1.kernel(tolerance=1e-10)
         cls.h6dcmp2_1 = dchf.DCMP2(cls.h6dchf_1)
         cls.h6dcmp2_1.kernel()
         cls.h6dcccsd_1 = dchf.DCCCSD(cls.h6dchf_1)
@@ -176,3 +176,21 @@ class HeliumChainTest(unittest.TestCase):
 
     def test_results(self):
         testing.assert_allclose(self.he10mp2.e_corr, self.he10dcmp2.e2)
+
+
+class BenzeneTest(unittest.TestCase):
+    def test_energy_trivial(self):
+        model = gto.M(
+            atom="C 2.46729129 2.84898257 5.85230447; C 1.23364564 2.13673693 5.85230447; C 2.46729128 4.27347386 5.85230447; C 0.00000001 2.84898257 5.85230447; C 1.23364565 4.98571950 5.85230447; C 0.00000000 4.27347386 5.85230447",
+            basis='cc-pvdz',
+            verbose=0,
+        )
+        hf_ref = scf.RHF(model)
+        hf_ref.conv_tol = 1e-12
+        hf_ref.kernel()
+
+        hf = dchf.DCHF(model)
+        hf.add_domain([0, 1, 2, 3, 4, 5])
+        hf.kernel(tolerance=1e-12)
+
+        testing.assert_allclose(hf.e_tot, hf_ref.e_tot)
