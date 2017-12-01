@@ -3,32 +3,37 @@ import common
 
 import unittest
 from numpy import testing
+import random
 
 
-def atomic_chain(n, name='H', spacing=1.4, basis='cc-pvdz', alt_spacing=None, **kwargs):
+def atomic_chain(n, name='H', spacing=1.4, alt_spacing=None, rndm=0.0, **kwargs):
     """
     Creates a Mole object with an atomic chain of a given size.
     Args:
         n (int): the size of an atomic chain;
         name (str): atom caption;
         spacing (float): spacing between atoms;
-        basis (str): basis string;
         alt_spacing (float): alternating spacing, if any;
+        rndm (float): random displacement of atoms;
 
     Returns:
         A Mole object with an atomic chain.
     """
+    default = dict(
+        basis='cc-pvdz',
+        verbose=0,
+    )
+    default.update(kwargs)
     if alt_spacing is None:
         alt_spacing = spacing
     a = 0.5*(spacing+alt_spacing)
     b = 0.5*(spacing-alt_spacing)
+    random.seed(0)
     return gto.M(
         atom=';'.join(list(
-            '{} 0 0 {:.1f}'.format(name, a*i + (i%2)*b) for i in range(n)
+            '{} 0 0 {:.1f}'.format(name, a*i + (i % 2)*b + random.random()*rndm - rndm/2) for i in range(n)
         )),
-        basis=basis,
-        verbose=0,
-        **kwargs
+        **default
     )
 
 
