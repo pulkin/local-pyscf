@@ -10,11 +10,17 @@ pyplot = fake.pyplot()
 
 tolerance = 1e-5
 
-draw_cluster_model("alkane-8", width=800, height=200)
+draw_cluster_model("alkane-12", width=800, height=200)
 
-dchf = load_pyscf_cluster_model("alkane-8", isolated_cluster=True)
+print "== 0 =="
+dchf = load_pyscf_cluster_model("alkane-12")
 dchf.__mol__.verbose = 4
 dchf.kernel()
+#
+# print "== 1 =="
+# del dchf.domains[1]
+# dchf.add_domain([1, 2, 3, 4, 5, 6, 7, 8, 9], core=[4, 5, 6], insert_at=1)
+# dchf.kernel()
 
 hf = scf.RHF(dchf.__mol__)
 hf.kernel()
@@ -31,7 +37,7 @@ for hf, subplot, title in (
         (dchf, 122, "DC-HF"),
 ):
     pyplot.subplot(subplot)
-    pyplot.imshow(abs(hf.dm if isinstance(hf, DCHF) else hf.make_rdm1()))
+    pyplot.imshow(abs(hf.dm if isinstance(hf, DCHF) else hf.make_rdm1()), vmin=0, vmax=2)
     pyplot.title(title)
     pyplot.colorbar()
 

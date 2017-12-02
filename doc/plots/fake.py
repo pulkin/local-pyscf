@@ -11,7 +11,7 @@ def p(x):
 
 
 class LogCalls(object):
-    def __init__(self, name, head="", line_start="", tail=""):
+    def __init__(self, name, head="", line_start="", tail="", proto=None):
         """A simple facility logging all method calls."""
         self.name = name
         if os.path.exists(name):
@@ -20,9 +20,12 @@ class LogCalls(object):
         self.head = head
         self.line_start = line_start
         self.tail = tail
+        self.proto = proto
 
     def __getattr__(self, item):
         def __(*args, **kwargs):
+            if self.proto is not None:
+                getattr(self.proto, item)(*args, **kwargs)
             self.items.append(
                 dict(
                     __method_name__=item,
@@ -47,6 +50,7 @@ class LogCalls(object):
 
 
 def pyplot(name=None):
+    from matplotlib import pyplot
     if name is None:
         name = inspect.stack()[1][1]
         if name[-3:] == ".py":
@@ -57,4 +61,5 @@ def pyplot(name=None):
         head="#/usr/bin/env python\n\"\"\"\nThis file was generated automatically.\n\"\"\"\nfrom matplotlib import pyplot",
         line_start="pyplot.",
         tail="\n",
+        proto=pyplot,
     )
