@@ -95,4 +95,4 @@ The benchmark model is :math:`\mathrm{C_{12} H_{26}}` split into ?? clusters by 
 The density matrix
 ------------------
 
-.. plot:: plots/27-dchf-errors-locality-alkane_cached.py
+#.. plot:: plots/27-dchf-errors-locality-alkane_cached.py

@@ -11,16 +11,11 @@ pyplot = fake.pyplot()
 tolerance = 1e-5
 
 draw_cluster_model("alkane-12", width=800, height=200)
+exit()
 
-print "== 0 =="
 dchf = load_pyscf_cluster_model("alkane-12")
 dchf.__mol__.verbose = 4
 dchf.kernel()
-#
-# print "== 1 =="
-# del dchf.domains[1]
-# dchf.add_domain([1, 2, 3, 4, 5, 6, 7, 8, 9], core=[4, 5, 6], insert_at=1)
-# dchf.kernel()
 
 hf = scf.RHF(dchf.__mol__)
 hf.kernel()
