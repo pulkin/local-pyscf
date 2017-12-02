@@ -156,18 +156,22 @@ class DCHF(HFLocalIntegralProvider):
         """
         self.domains = []
 
-    def add_domain(self, domain, partition_matrix=None, core=None):
+    def add_domain(self, domain, partition_matrix=None, core=None, insert_at=None):
         """
         Adds a domain.
         Args:
             domain (list, tuple): a list of atoms included into this domain;
             partition_matrix (numpy.ndarray): partition matrix for this domain;
             core (list, tuple): atoms included in the core of this domain;
+            insert_at (int): insert domain into a specific position of `self.domains`'
         """
         d = Domain(domain, self, partition_matrix=partition_matrix, core=core)
         if d.mol.nelectron % 2 == 1:
             warn("The number of electrons in the domain added is odd. Convergence may be difficult")
-        self.domains.append(d)
+        if insert_at is not None:
+            self.domains.insert(insert_at, d)
+        else:
+            self.domains.append(d)
 
     def domains_pattern(self, n):
         """
@@ -283,7 +287,7 @@ class DCHF(HFLocalIntegralProvider):
 
     def update_total_dm(self):
         """
-        Updates the total density matrix.
+        Updates the total density matrix and the Hartree-Fock energy.
         Returns:
             The maximal deviation from the previous density matrix.
         """
@@ -298,7 +302,7 @@ class DCHF(HFLocalIntegralProvider):
 
         return abs(self.dm-old_dm).max()
 
-    def kernel(self, tolerance=1e-6, maxiter=100, dm_hook="diis"):
+    def kernel(self, tolerance=1e-6, maxiter=100, dm_hook="diis", domain_hook=None):
         """
         Performs self-consistent iterations.
         Args:
@@ -308,6 +312,9 @@ class DCHF(HFLocalIntegralProvider):
             dm_hook (func): a hook called right after the density matrix was calculated. It is called with a single
             argument, self, and should return a new density matrix. It is allowed to not return anything. A special
             value "diis" stands for `pyscf.diis.DIIS.update` with an adjusted input;
+
+            domain_hook (func): a hook called right after the domains' eigenstates were updated. It is called with a
+            single argument, self. The return value is discarded;
 
         Returns:
             The converged energy value which is also stored as `self.hf_energy`.
@@ -332,6 +339,8 @@ class DCHF(HFLocalIntegralProvider):
         logger.info(self.__mol__, "Running self-consistent calculation ...")
         while True:
             self.update_domain_eigs()
+            if domain_hook is not None:
+                domain_hook(self)
             self.update_chemical_potential()
             self.update_domain_dm()
             delta = self.update_total_dm()
@@ -339,10 +348,11 @@ class DCHF(HFLocalIntegralProvider):
                 result = dm_hook(self)
                 if result is not None:
                     self.dm = result
-            logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e} mu = {:.10f}".format(
+            logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e} mu = {:.10f} q = {:.3e}".format(
                 self.e_tot,
                 delta,
                 self.mu,
+                self.__mol__.nelectron - (self.dm*self.ovlp).sum(),
             ))
             logger.debug(self.__mol__, "    mo_energy =\n{}".format(
                 repr(numpy.sort(numpy.concatenate(list(i.e for i in self.domains), axis=0))))
