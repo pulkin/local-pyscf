@@ -175,22 +175,5 @@ class HeliumChainTest(unittest.TestCase):
         cls.he10dcmp2.kernel()
 
     def test_results(self):
+        testing.assert_allclose(self.he10mf.e_tot, self.he10dchf.e_tot)
         testing.assert_allclose(self.he10mp2.e_corr, self.he10dcmp2.e2)
-
-
-class BenzeneTest(unittest.TestCase):
-    def test_energy_trivial(self):
-        model = gto.M(
-            atom="C 2.46729129 2.84898257 5.85230447; C 1.23364564 2.13673693 5.85230447; C 2.46729128 4.27347386 5.85230447; C 0.00000001 2.84898257 5.85230447; C 1.23364565 4.98571950 5.85230447; C 0.00000000 4.27347386 5.85230447",
-            basis='cc-pvdz',
-            verbose=0,
-        )
-        hf_ref = scf.RHF(model)
-        hf_ref.conv_tol = 1e-12
-        hf_ref.kernel()
-
-        hf = dchf.DCHF(model)
-        hf.add_domain([0, 1, 2, 3, 4, 5])
-        hf.kernel(tolerance=1e-12)
-
-        testing.assert_allclose(hf.e_tot, hf_ref.e_tot)
