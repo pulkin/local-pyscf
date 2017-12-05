@@ -14,13 +14,14 @@ draw_cluster_model("alkane-4", width=800, height=200)
 
 dchf = load_pyscf_cluster_model("alkane-4")
 dchf.__mol__.verbose = 4
-dchf.kernel()
+dchf.kernel(tolerance=tolerance)
 
 # dchf_nb = load_pyscf_cluster_model("alkane-12", isolated_cluster=True)
 # dchf_nb.__mol__.verbose = 4
 # dchf_nb.kernel(fock_hook=None)
 
 hf = scf.RHF(dchf.__mol__)
+hf.conv_tol = tolerance
 hf.kernel()
 dm_ref = hf.make_rdm1()
 
