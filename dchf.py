@@ -122,6 +122,19 @@ class Domain(object):
         self.mol.nelectron = self.mol.atom_charges()[self.atoms, ].sum()
 
 
+class DIISFockHook(object):
+    def __init__(self):
+        self.__diis__ = scf.diis.SCF_DIIS()
+        self.__diis__.space = 8
+        self.iterations = 0
+
+    def __call__(self, dchf):
+        if self.iterations > 0:
+            return self.__diis__.update(dchf.ovlp, dchf.dm, dchf.fock)
+        else:
+            return dchf.fock
+
+
 class DCHF(HFLocalIntegralProvider):
     def __init__(self, mol, distribution_function=common.gaussian_distribution, temperature=30, eri_threshold=1e-12):
         """
@@ -143,7 +156,9 @@ class DCHF(HFLocalIntegralProvider):
         self.domains = []
 
         self.dm = None
+        self.fock = None
         self.ovlp = None
+        self.hcore = None
         self.hf_energy = None
         self.e_tot = None
         self.mu = None
@@ -187,21 +202,21 @@ class DCHF(HFLocalIntegralProvider):
             result[numpy.ix_(*((d.ao,)*n))] = True
         return result
 
-    def prepare_dm(self):
-        """
-        Prepares the density matrix.
-        """
-        if self.dm is None:
-            self.dm = scf.hf.get_init_guess(self.__mol__)
-        self.ovlp = self.get_ovlp(None, None)
-        self.dm *= self.domains_pattern(2)
-        self.dm *= self.__mol__.nelectron / (self.dm*self.ovlp).sum()
-
     def build(self):
         """
-        Calculates ERI.
+        Prepares matrixes.
         """
-        self.prepare_dm()
+        mask = self.domains_pattern(2)
+        # Overlap matrix
+        self.ovlp = self.get_ovlp(None, None) * mask
+        # Core matrix
+        self.hcore = self.get_hcore(None, None) * mask
+        # Density matrix
+        if self.dm is None:
+            self.dm = scf.hf.get_init_guess(self.__mol__)
+        self.dm *= mask
+        self.dm *= self.__mol__.nelectron / (self.dm*self.ovlp).sum()
+        # ERI
         self.eri_j = {}
         self.eri_k = {}
         # Diagonal
@@ -235,16 +250,24 @@ class DCHF(HFLocalIntegralProvider):
             ))+" are not covered by any domain")
         return result
 
+    def update_fock(self):
+        """
+        Updates Fock matrix.
+        """
+        self.fock = numpy.zeros_like(self.hcore)
+        for i, d in enumerate(self.domains):
+            self.fock[d.d2i] = self.hcore[d.d2i]
+            for j, d2 in enumerate(self.domains):
+                dm = self.dm[d2.d2i] * d2.partition_matrix
+                self.fock[d.d2i] += numpy.einsum("ijkl,kl->ij", self.eri_j[i, j], dm) -\
+                       0.5*numpy.einsum("ijkl,jk->il", self.eri_k[i, j], dm)
+
     def update_domain_eigs(self):
         """
         Updates domains' eigenstates and eigenvalues.
         """
         for i, d in enumerate(self.domains):
-            d.h = d.hcore.copy()
-            for j, d2 in enumerate(self.domains):
-                dm = self.dm[d2.d2i] * d2.partition_matrix
-                d.h += numpy.einsum("ijkl,kl->ij", self.eri_j[i, j], dm) -\
-                       0.5*numpy.einsum("ijkl,jk->il", self.eri_k[i, j], dm)
+            d.h = self.fock[d.d2i]
             d.e, d.psi = scipy.linalg.eigh(d.h, d.ovlp)
             d.weights = numpy.einsum("ij,kj,ik,ik->j", d.psi, d.psi, d.ovlp, d.partition_matrix)
 
@@ -302,15 +325,15 @@ class DCHF(HFLocalIntegralProvider):
 
         return abs(self.dm-old_dm).max()
 
-    def kernel(self, tolerance=1e-6, maxiter=100, dm_hook="diis", domain_hook=None):
+    def kernel(self, tolerance=1e-6, maxiter=100, fock_hook="diis", domain_hook=None):
         """
         Performs self-consistent iterations.
         Args:
             tolerance (float): density matrix convergence criterion;
             maxiter (int): maximal number of iterations;
 
-            dm_hook (func): a hook called right after the density matrix was calculated. It is called with a single
-            argument, self, and should return a new density matrix. It is allowed to not return anything. A special
+            fock_hook (func): a hook called right after the Fock matrix was calculated. It is called with a single
+            argument, self, and should return a new Fock matrix. It is allowed to not return anything. A special
             value "diis" stands for `pyscf.diis.DIIS.update` with an adjusted input;
 
             domain_hook (func): a hook called right after the domains' eigenstates were updated. It is called with a
@@ -319,13 +342,9 @@ class DCHF(HFLocalIntegralProvider):
         Returns:
             The converged energy value which is also stored as `self.hf_energy`.
         """
-        if dm_hook == "diis":
+        if fock_hook == "diis":
             logger.info(self.__mol__, "Initializing DIIS ...")
-            __diis__ = diis.DIIS()
-            __diis__.space = 8
-
-            def dm_hook(dchf):
-                return __diis__.update(dchf.dm)
+            fock_hook = DIISFockHook()
 
         logger.info(self.__mol__, "Checking domain coverage ...")
         self.domains_cover(r=True)
@@ -338,16 +357,17 @@ class DCHF(HFLocalIntegralProvider):
 
         logger.info(self.__mol__, "Running self-consistent calculation ...")
         while True:
+            self.update_fock()
+            if fock_hook is not None:
+                result = fock_hook(self)
+                if result is not None:
+                    self.fock = result
             self.update_domain_eigs()
             if domain_hook is not None:
                 domain_hook(self)
             self.update_chemical_potential()
             self.update_domain_dm()
             delta = self.update_total_dm()
-            if dm_hook is not None:
-                result = dm_hook(self)
-                if result is not None:
-                    self.dm = result
             logger.info(self.__mol__, "  E = {:.10f} delta = {:.3e} mu = {:.10f} q = {:.3e}".format(
                 self.e_tot,
                 delta,
