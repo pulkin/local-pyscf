@@ -88,11 +88,11 @@ The minimal distance is kept constant at 1.4A.
 Case 3: Linear alkanes
 ======================
 
-The benchmark model is :math:`\mathrm{C_{12} H_{26}}` split into ?? clusters by default.
+The benchmark model is :math:`\mathrm{C_{4} H_{10}}` split into 4 clusters.
 
-.. image:: plots/alkane-12-domains.svg
+.. image:: plots/alkane-4-domains.svg
 
 The density matrix
 ------------------
 
-#.. plot:: plots/27-dchf-errors-locality-alkane_cached.py
+.. plot:: plots/27-dchf-errors-locality-alkane_cached.py

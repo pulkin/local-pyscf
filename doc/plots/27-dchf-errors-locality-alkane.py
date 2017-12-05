@@ -10,12 +10,15 @@ pyplot = fake.pyplot()
 
 tolerance = 1e-5
 
-draw_cluster_model("alkane-12", width=800, height=200)
-exit()
+draw_cluster_model("alkane-4", width=800, height=200)
 
-dchf = load_pyscf_cluster_model("alkane-12")
+dchf = load_pyscf_cluster_model("alkane-4")
 dchf.__mol__.verbose = 4
 dchf.kernel()
+
+# dchf_nb = load_pyscf_cluster_model("alkane-12", isolated_cluster=True)
+# dchf_nb.__mol__.verbose = 4
+# dchf_nb.kernel(fock_hook=None)
 
 hf = scf.RHF(dchf.__mol__)
 hf.kernel()
@@ -26,8 +29,12 @@ mask = numpy.logical_not(dchf.domains_pattern(2))
 print "DM intrinsic error:", abs(dm_ref*mask).max()
 print "Energy diff:", abs(dchf.e_tot - hf.e_tot)
 
+# pyplot.figure(figsize=(20, 4.8))
 pyplot.figure(figsize=(12, 4.8))
 for hf, subplot, title in (
+#        (hf, 131, "HF"),
+#        (dchf_nb, 132, "DC-HF (no buffer)"),
+#        (dchf, 133, "DC-HF"),
         (hf, 121, "HF"),
         (dchf, 122, "DC-HF"),
 ):

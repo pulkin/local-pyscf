@@ -13,7 +13,7 @@ def calculate(model, domain_size, buffer_size=0, diis=True):
 
     # Since the convergence criterion is never met an exception will be raised
     try:
-        hf.kernel(tolerance=0, maxiter=maxiter, dm_hook="diis" if diis else None)
+        hf.kernel(tolerance=0, maxiter=maxiter, fock_hook="diis" if diis else None)
     except RuntimeError:
         pass
     return hf.convergence_history
