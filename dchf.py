@@ -129,7 +129,8 @@ class DIISFockHook(object):
         self.iterations = 0
 
     def __call__(self, dchf):
-        if self.iterations > 0:
+        self.iterations += 1
+        if self.iterations > 1:
             return self.__diis__.update(dchf.ovlp, dchf.dm, dchf.fock)
         else:
             return dchf.fock
