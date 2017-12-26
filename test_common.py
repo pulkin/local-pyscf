@@ -2,8 +2,30 @@ from pyscf import gto
 import common
 
 import unittest
+import numpy
 from numpy import testing
 import random
+
+
+def assert_eye(a, **kwargs):
+    """
+    Tests whether the matrix is equal to the unity matrix.
+    Args:
+        a (numpy.ndarray): a 2D matrix;
+        **kwargs: keyword arguments to `numpy.testing.assert_allclose`;
+    """
+    testing.assert_equal(a.shape[0], a.shape[1])
+    testing.assert_allclose(a, numpy.eye(a.shape[0]), **kwargs)
+
+
+def assert_basis_orthonormal(a, **kwargs):
+    """
+    Tests orthonormality of the basis set.
+    Args:
+        a (numpy.ndarray): a 2D matrix with basis coefficients;
+        **kwargs: keyword arguments to `numpy.testing.assert_allclose`;
+    """
+    assert_eye(a.conj().T.dot(a), **kwargs)
 
 
 def atomic_chain(n, name='H', spacing=1.4, alt_spacing=None, rndm=0.0, **kwargs):
