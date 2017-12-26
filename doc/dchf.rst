@@ -92,8 +92,10 @@ The benchmark model is :math:`\mathrm{C_{6} H_{14}}` split into 6 clusters.
 
 .. image:: plots/alkane-6-domains.svg
 
-The density matrix
+Basis set: cc-pvdz
 ------------------
+
+The density matrix comparison:
 
 .. plot:: plots/27-dchf-errors-locality-alkane_cached.py
 
@@ -102,3 +104,16 @@ DM error: 1.27165943285
 DM intrinsic error: 0.00862713587552
 
 Energy diff: 0.769603364653
+
+Basis set: sto3g
+----------------
+
+The density matrix comparison:
+
+.. plot:: plots/27-dchf-errors-locality-alkane-alt_cached.py
+
+DM error: 0.0747824565832
+
+DM intrinsic error: 0.0108856898115
+
+Energy diff: 0.0193028866541
