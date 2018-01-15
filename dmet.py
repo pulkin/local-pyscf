@@ -386,7 +386,7 @@ class MuFragmentDMETUSC(GenericDMETUmatSelfConsistency):
     def gradients(self):
         n = self.umat_projector.shape[1]
         gradients = GenericDMETUmatSelfConsistency.gradients(self).reshape(n, n)
-        return -numpy.diag(gradients).sum()
+        return numpy.array([-numpy.diag(gradients).sum()])
     gradients.__doc__ = GenericDMETUmatSelfConsistency.gradients.__doc__
 
 
