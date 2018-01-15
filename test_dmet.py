@@ -44,7 +44,7 @@ class HubbardModelTest(unittest.TestCase):
         Test a dummy interacting-bath setup where the fragment solver is RHF. The fragment size is 1.
         """
         self.__test_dummy__(
-            dmet.LocalFragmentIntoFullUmatDMETSelfConsistency,
+            dmet.FragmentFullDMETUSC,
             1,
             associate='all',
             style="interacting-bath",
@@ -55,7 +55,7 @@ class HubbardModelTest(unittest.TestCase):
         Test a dummy non-interacting-bath setup where the fragment solver is RHF. The fragment size is 1.
         """
         self.__test_dummy__(
-            dmet.LocalFragmentIntoFullUmatDMETSelfConsistency,
+            dmet.FragmentFullDMETUSC,
             1,
             associate='all',
             style="non-interacting-bath",
@@ -66,7 +66,7 @@ class HubbardModelTest(unittest.TestCase):
         Test a dummy interacting-bath setup where the fragment solver is RHF. The fragment size is 2.
         """
         self.__test_dummy__(
-            dmet.LocalFragmentIntoFullUmatDMETSelfConsistency,
+            dmet.FragmentFullDMETUSC,
             2,
             associate='all',
             style="interacting-bath",
@@ -78,7 +78,7 @@ class HubbardModelTest(unittest.TestCase):
         matrix is fitted. The fragment size is 1.
         """
         self.__test_dummy__(
-            dmet.LocalFragmentDMETUmatSelfConsistency,
+            dmet.FragmentFragmentDMETUSC,
             1,
             associate='all',
             style="interacting-bath",
@@ -90,7 +90,7 @@ class HubbardModelTest(unittest.TestCase):
         1.
         """
         self.__test_dummy__(
-            dmet.LocalFragmentDMETUmatSelfConsistency,
+            dmet.FragmentFragmentDMETUSC,
             1,
             associate='all',
             style="interacting-bath",

@@ -306,10 +306,10 @@ class GenericUtriDMETUmatSelfConsistency(GenericDMETUmatSelfConsistency):
     gradients.__doc__ = GenericDMETUmatSelfConsistency.gradients.__doc__
 
 
-class LocalFragmentDMETUmatSelfConsistency(GenericUtriDMETUmatSelfConsistency):
+class FragmentFragmentDMETUSC(GenericUtriDMETUmatSelfConsistency):
     def __init__(self, driver, projector, reference_solution, log=None):
         """
-        Consistency between the u-matrix and the density matrix of the projected fragment.
+        Consistency between the fragment u-matrix and the fragment density matrix.
         Args:
             driver: a mean-field object;
             projector (numpy.ndarray): a projector for the local fragment;
@@ -326,10 +326,10 @@ class LocalFragmentDMETUmatSelfConsistency(GenericUtriDMETUmatSelfConsistency):
         )
 
 
-class LocalFragmentIntoFullUmatDMETSelfConsistency(GenericUtriDMETUmatSelfConsistency):
+class FragmentFullDMETUSC(GenericUtriDMETUmatSelfConsistency):
     def __init__(self, driver, projector, reference_solution, log=None):
         """
-        Consistency between the u-matrix and the density matrix of the projected fragment.
+        Consistency between the fragment u-matrix and the full density matrix.
         Args:
             driver: a mean-field object;
             projector (numpy.ndarray): a projector for the local fragment;
