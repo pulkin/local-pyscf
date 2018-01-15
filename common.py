@@ -1,10 +1,13 @@
 import itertools
 
-from pyscf import gto
-from pyscf.lib import diis
+from pyscf import gto, scf
+from pyscf.lib import logger
+from pyscf.scf.hf import RHF
+from pyscf.fci.direct_spin0 import FCISolver
+from pyscf.ao2mo import restore
 
 import numpy
-from scipy import special
+from scipy import special, linalg
 
 
 def transform(o, psi, axes="all", mode="fast"):
@@ -414,3 +417,212 @@ def gaussian_distribution(chemical_potential, temperature, energies):
     """
     return 1 - special.erf((energies-chemical_potential)/temperature)
 
+
+class NonSelfConsistentMeanField(object):
+    def __init__(self, mf):
+        """
+        A non-self-consistent mean-field model.
+        Args:
+            mf: a reference mean-field solution;
+        """
+        self.mol = mf.mol.copy()
+        self._eri = mf._eri
+
+        self.__veff__ = mf.get_veff()
+        self.__hcore__ = mf.get_hcore()
+        self.__ovlp__ = mf.get_ovlp()
+
+        self.e_tot = None
+        self.mo_energy = None
+        self.mo_coeff = None
+        self.mo_occ = mf.mo_occ.copy()
+
+    def get_ovlp(self):
+        return self.__ovlp__
+
+    def get_hcore(self):
+        return self.__hcore__
+
+    def get_veff(self):
+        return self.__veff__
+
+    def get_fock(self):
+        return self.get_hcore() + self.get_veff()
+
+    def make_rdm1(self):
+        return scf.hf.make_rdm1(self.mo_coeff, self.mo_occ)
+
+    def energy_elec(self):
+        h1e = self.get_hcore()
+        dm = self.make_rdm1()
+        vhf = self.get_veff()
+        e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
+        e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
+        return e1 + e_coul, e_coul
+
+    def energy_nuc(self):
+        return self.mol.energy_nuc()
+
+    def energy_tot(self):
+        return self.energy_elec()[0] + self.energy_nuc()
+
+    def kernel(self):
+        """
+        Performs a non-self-consistent calculation.
+        Returns:
+            The total energy.
+        """
+        self.mo_energy, self.mo_coeff = linalg.eigh(
+            self.get_fock(),
+            self.get_ovlp(),
+        )
+        self.e_tot = self.energy_tot()
+        logger.note(self.mol, 'non-SCF energy = %.15g', self.e_tot)
+        return self.e_tot
+
+
+def partial_etot(hcore, eri, rho1, rho2, s):
+    """
+    Calculates a partial total energy value using democratic partitioning.
+    Args:
+        hcore (numpy.ndarray): the one-particle Hamiltonian part;
+        eri (numpy.ndarray): the two-particle Hamiltonian part;
+        rho1 (numpy.ndarray): the one-particle density matrix;
+        rho2 (numpy.ndarray): the two-particle density matrix;
+        s (slice): a slice or an array defining system fragment;
+
+    Returns:
+        The partial total energy value.
+    """
+    eri = restore(1, eri, hcore.shape[0])
+    term1 = hcore*rho1
+    term2 = (eri - 0.5*eri.transpose(0, 3, 2, 1))*rho2
+
+    def democratic_partitioning(x, significant_slice):
+        empty_slice = slice(None)
+        return 1.0/len(x.shape) * sum(x[(empty_slice,)*i + (significant_slice,)].sum() for i in range(len(x.shape)))
+
+    return democratic_partitioning(term1, s) + democratic_partitioning(term2, s)
+
+
+def partial_nelec(rho1, s):
+    """
+    Calculates the partial electronic occupation of the system.
+    Args:
+        rho1 (numpy.ndarray): the one-particle density matrix;
+        s (slice): a slice or an array defining system fragment;
+
+    Returns:
+        The partial occupation number.
+    """
+    return numpy.diag(rho1)[s].sum()
+
+
+class ModelRHF(RHF):
+    def __init__(self, hcore, eri, e_vac=0, ovlp=None, **kwargs):
+        """
+        RHF solver of model Hamiltonians with DMET interface.
+        Args:
+            hcore (numpy.ndarray): the core part of the Hamiltonian;
+            eri (numpy.ndarray): ERI 4-tensor;
+            e_vac (float): the energy of the vacuum;
+            ovlp (numpy.ndarray): the overlap matrix;
+            **kwargs: keyword arguments to a dummy Mole object;
+        """
+        mol = gto.Mole()
+        for k, v in kwargs.items():
+            setattr(mol, k, v)
+        mol.build()
+        RHF.__init__(self, mol)
+        self.__hcore__ = hcore
+        if ovlp is None:
+            self.__ovlp__ = numpy.eye(hcore.shape[0])
+        else:
+            self.__ovlp__ = ovlp
+        self.__e_vac__ = e_vac
+        self._eri = restore(8, eri, eri.shape[0])
+
+    def get_hcore(self, *args, **kwargs):
+        return self.__hcore__
+
+    def get_ovlp(self, *args, **kwargs):
+        return self.__ovlp__
+
+    def energy_nuc(self):
+        return self.__e_vac__
+
+    def partial_etot(self, s):
+        rho1 = self.make_rdm1()
+        rho2 = numpy.einsum("ij,kl->ijkl", rho1, rho1) / 2
+        return partial_etot(self.__hcore__, self._eri, rho1, rho2, s)
+
+    def partial_nelec(self, s):
+        return partial_nelec(self.make_rdm1(), s)
+
+
+class ModelFCI(FCISolver):
+    def __init__(self, hcore, eri, e_vac=0, ovlp=None, **kwargs):
+        """
+        FCI solver of model Hamiltonians with DMET interface.
+        Args:
+            hcore (numpy.ndarray): the core part of the Hamiltonian;
+            eri (numpy.ndarray): ERI 4-tensor;
+            e_vac (float): the energy of the vacuum;
+            ovlp (numpy.ndarray): the overlap matrix;
+            **kwargs: keyword arguments to a dummy Mole object;
+        """
+        mol = gto.Mole()
+        for k, v in kwargs.items():
+            setattr(mol, k, v)
+        mol.build()
+        FCISolver.__init__(self, mol)
+        self.__hcore__ = hcore
+        if ovlp is None:
+            self.__ovlp__ = numpy.eye(hcore.shape[0])
+        else:
+            self.__ovlp__ = ovlp
+        self.__e_vac__ = e_vac
+        self.__eri__ = restore(8, eri, eri.shape[0])
+
+        self.e_tot = None
+        self.psi = None
+        self._keys = set(self.__dict__.keys())
+
+    def kernel(self, **kwargs):
+        e, psi = FCISolver.kernel(
+            self,
+            self.__hcore__,
+            self.__eri__,
+            self.__hcore__.shape[0],
+            self.mol.nelectron,
+            **kwargs
+        )
+        e += self.__e_vac__
+        self.e_tot = e
+        self.psi = psi
+        return e, psi
+
+    def make_rdm1(self, **kwargs):
+        return FCISolver.make_rdm1(
+            self,
+            self.psi,
+            self.__hcore__.shape[0],
+            self.mol.nelectron,
+            **kwargs
+        )
+
+    def make_rdm12(self, **kwargs):
+        return FCISolver.make_rdm12(
+            self,
+            self.psi,
+            self.__hcore__.shape[0],
+            self.mol.nelectron,
+            **kwargs
+        )
+
+    def partial_etot(self, s):
+        rho1, rho2 = self.make_rdm12()
+        return partial_etot(self.__hcore__, self.__eri__, rho1, rho2, s)
+
+    def partial_nelec(self, s):
+        return partial_nelec(self.make_rdm1(), s)
