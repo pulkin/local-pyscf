@@ -141,7 +141,7 @@ class DummyIntegralProvider(common.AbstractIntegralProvider):
 class HydrogenChainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.h6chain = atomic_chain(6, alt_spacing=2.3)
+        cls.h6chain = hydrogen_dimer_chain(6)
         cls.h6ip = common.IntegralProvider(cls.h6chain)
         cls.h6dip = DummyIntegralProvider(cls.h6chain)
 
@@ -169,7 +169,7 @@ class HydrogenChainTest(unittest.TestCase):
 class ThresholdTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.h6chain = atomic_chain(6, alt_spacing=2.3)
+        cls.h6chain = hydrogen_dimer_chain(6)
         cls.t = 1e-5
         cls.h6ip = common.IntegralProvider(cls.h6chain)
         cls.h6dip = DummyIntegralProvider(cls.h6chain)
