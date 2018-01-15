@@ -1,4 +1,4 @@
-from pyscf import gto
+from pyscf import gto, scf
 import common
 
 import unittest
