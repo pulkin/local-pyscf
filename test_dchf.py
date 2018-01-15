@@ -58,7 +58,7 @@ class HydrogenChainTest(unittest.TestCase):
         # Three-domain DCHF
         cls.h6dchf_3 = dchf.DCHF(cls.h6chain)
         assign_chain_domains(cls.h6dchf_3, 2, 2)
-        cls.h6dchf_3.kernel()
+        cls.h6dchf_3.kernel(fock_hook=None)
         cls.h6dcmp2_3 = dchf.DCMP2(cls.h6dchf_3)
         cls.h6dcmp2_3.kernel()
         cls.h6dcccsd_3 = dchf.DCCCSD(cls.h6dchf_3)
@@ -148,7 +148,7 @@ class HydrogenChain12Test(unittest.TestCase):
         Tests DCHF iterations.
         """
         assign_chain_domains(self.h12dchf, 4, 2)
-        e = self.h12dchf.kernel(tolerance=1e-9)
+        e = self.h12dchf.kernel(tolerance=1e-9, fock_hook=None)
         testing.assert_allclose(self.h12dchf.dm, self.dm, atol=1e-2)
         testing.assert_allclose(self.h12mf.e_tot - self.h12chain.energy_nuc(), e, rtol=1e-4)
 
