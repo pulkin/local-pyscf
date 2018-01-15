@@ -71,6 +71,35 @@ def hydrogen_distant_dimer_chain(n, **kwargs):
     return atomic_chain(n, alt_spacing=6, **kwargs)
 
 
+def hubbard_model_driver(u, n, nelec, pbc=True, t=-1, driver=common.ModelRHF):
+    """
+    Sets up the Hubbard model.
+    Args:
+        u (float): the on-site interaction value;
+        n (int): the number of sites;
+        nelec (int): the number of electrons;
+        pbc (bool): closes the chain if True;
+        t (float): the hopping term value;
+        driver: a supported driver;
+
+    Returns:
+        The Hubbard model.
+    """
+    hcore = t * (numpy.eye(n, k=1) + numpy.eye(n, k=-1))
+    if pbc:
+        hcore[0, n-1] = hcore[n-1, 0] = t
+    eri = numpy.zeros((n, n, n, n), dtype=numpy.float)
+    for i in range(n):
+        eri[i, i, i, i] = u
+    result = driver(
+        hcore,
+        eri,
+        nelectron=nelec,
+        verbose=4,
+    )
+    return result
+
+
 class DummyIntegralProvider(common.AbstractIntegralProvider):
     def get_ovlp(self, atoms1, atoms2):
         """
