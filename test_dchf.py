@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from pyscf import scf, mp, cc, gto
+from pyscf import scf, mp, cc
 import dchf
 
 import numpy
