@@ -84,6 +84,18 @@ class HubbardModelTest(unittest.TestCase):
             style="interacting-bath",
         )
 
+    def test_dummy_mu(self):
+        """
+        Test a dummy interacting-bath setup where the fragment solver is RHF and only the potential is fitted. The
+        fragment size is 1.
+        """
+        self.__test_dummy__(
+            dmet.MuFragmentDMETUSC,
+            1,
+            associate='all',
+            style="interacting-bath",
+        )
+
     def test_non_self_consistent(self):
         """
         Test a dummy interacting-bath non-self-consistent setup where the fragment solver is RHF. The fragment size is

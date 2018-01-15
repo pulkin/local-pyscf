@@ -346,6 +346,50 @@ class FragmentFullDMETUSC(GenericUtriDMETUmatSelfConsistency):
         )
 
 
+class MuFragmentDMETUSC(GenericDMETUmatSelfConsistency):
+    def __init__(self, driver, projector, reference_solution, log=None):
+        """
+        Consistency between the chemical potential of the fragment and the fragment density matrix.
+        Args:
+            driver: a mean-field object;
+            projector (numpy.ndarray): a projector for the local fragment;
+            log: a pyscf object to log to;
+        """
+        n = projector.shape[1]
+        GenericDMETUmatSelfConsistency.__init__(
+            self,
+            driver,
+            projector[:, :n // 2],
+            reference_solution,
+            log=log,
+            solution_dm_slice=slice(None, n // 2)
+        )
+
+    def get_default_guess(self):
+        return 0
+    get_default_guess.__doc__ = GenericDMETUmatSelfConsistency.get_default_guess.__doc__
+
+    def parametrize_umat(self, chemical_potential):
+        """
+        Calculates the u-matrix in the projected basis.
+        Args:
+            chemical_potential (float): the chemical potential;
+
+        Returns:
+            The u-matrix value.
+        """
+        return GenericDMETUmatSelfConsistency.parametrize_umat(
+            self,
+            -numpy.eye(self.umat_projector.shape[1]) * chemical_potential,
+        )
+
+    def gradients(self):
+        n = self.umat_projector.shape[1]
+        gradients = GenericDMETUmatSelfConsistency.gradients(self).reshape(n, n)
+        return -numpy.diag(gradients).sum()
+    gradients.__doc__ = GenericDMETUmatSelfConsistency.gradients.__doc__
+
+
 def get_sd_schmidt_basis(basis, domain, threshold=1e-14):
     """
     Retrieves the Schmidt basis for Slater determinants.
