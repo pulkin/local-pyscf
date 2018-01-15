@@ -204,3 +204,18 @@ class ThresholdTest(unittest.TestCase):
 
         assert t1
         assert t2
+
+
+class UtilityTest(unittest.TestCase):
+    def test_frozen(self):
+        h6chain = hydrogen_dimer_chain(6)
+        mf = scf.RHF(h6chain)
+        mf.conv_tol = 1e-10
+        mf.kernel()
+        en, dm, eps = mf.e_tot, mf.make_rdm1(), mf.mo_energy
+
+        common.NonSelfConsistentMeanField(mf)
+        mf.kernel()
+        testing.assert_allclose(en, mf.e_tot)
+        testing.assert_allclose(dm, mf.make_rdm1(), atol=1e-8)
+        testing.assert_allclose(eps, mf.mo_energy, atol=1e-8)
