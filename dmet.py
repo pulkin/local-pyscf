@@ -493,7 +493,7 @@ class GlobalChemicalPotentialFit(object):
 
         result = []
         total = 0
-        for i, c in zip(self.solvers, self.factors):
+        for ind, (i, c) in enumerate(zip(self.solvers, self.factors)):
             n = i.__hcore__.shape[0] // 2
             i.__hcore__[:n, :n] -= numpy.eye(n) * mu
             i.kernel()
@@ -501,6 +501,10 @@ class GlobalChemicalPotentialFit(object):
             dm = i.make_rdm1()
             result.append(numpy.diag(dm)[:n].sum())
             total += c*result[-1]
+            logger.debug2(self.__log__, "| solver {:d} E={:.8f}".format(
+                ind,
+                i.e_tot,
+            ))
 
         logger.debug1(self.__log__, "| occupations {} = {:.3e}".format(
             "+".join("{:.1f}*{:.3f}".format(i, j) for i, j in zip(self.factors, result)),
