@@ -792,7 +792,14 @@ class DMET(object):
                 ))
 
                 n_active_domain = schmidt_basis[0].shape[1]
-                partial_energy = embedded_solver.partial_etot(slice(n_active_domain))
+                # TODO: fix this; no need to recalculate hcore
+                partial_energy = embedded_solver.partial_etot(
+                    slice(n_active_domain),
+                    transform(
+                        self.__mf_solver__.get_hcore(),
+                        self.__orthogonal_basis_inv__.T.dot(numpy.concatenate(schmidt_basis, axis=1)),
+                    ),
+                )
                 self.e_tot += nreplica * partial_energy
 
                 logger.debug1(self.__mol__, "Correlated solver partial energy E = {:.10f}".format(

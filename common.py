@@ -554,10 +554,18 @@ class ModelRHF(RHF):
     def energy_nuc(self):
         return self.__e_vac__
 
-    def partial_etot(self, s):
+    def partial_etot(self, s, original_hcore=0):
+        if original_hcore is None:
+            original_hcore = self.__hcore__
         rho1 = self.make_rdm1()
         rho2 = numpy.einsum("ij,kl->ijkl", rho1, rho1) / 2
-        return partial_etot(self.__hcore__, self._eri, rho1, rho2, s)
+        return partial_etot(
+            0.5 * (self.__hcore__ + original_hcore),
+            self._eri,
+            rho1,
+            rho2,
+            s,
+        )
 
     def partial_nelec(self, s):
         return partial_nelec(self.make_rdm1(), s)
@@ -623,9 +631,17 @@ class ModelFCI(FCISolver):
             **kwargs
         )
 
-    def partial_etot(self, s):
+    def partial_etot(self, s, original_hcore=None):
+        if original_hcore is None:
+            original_hcore = self.__hcore__
         rho1, rho2 = self.make_rdm12()
-        return partial_etot(self.__hcore__, self.__eri__, rho1, rho2, s)
+        return partial_etot(
+            0.5 * (self.__hcore__ + original_hcore),
+            self.__eri__,
+            rho1,
+            rho2,
+            s,
+        )
 
     def partial_nelec(self, s):
         return partial_nelec(self.make_rdm1(), s)
