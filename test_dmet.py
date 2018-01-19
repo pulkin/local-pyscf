@@ -9,6 +9,127 @@ from numpy import testing
 from test_common import hubbard_model_driver, hydrogen_dimer_chain
 
 
+def numeric_gradients(f, parameters, delta=1e-6):
+    """
+    Calculates numeric gradients
+    Args:
+        f (func): a function returning scalars;
+        parameters (tuple, list, numpy.ndarray): vector to calculate gradients at;
+        delta (float): a finite difference for numerical gradients;
+
+    Returns:
+        A vector with gradients.
+    """
+    g_num = []
+    if isinstance(parameters, (float, int)):
+        parameters = numpy.array([parameters])
+    else:
+        parameters = numpy.array(parameters)
+    y0 = f(parameters)
+    for i in range(len(parameters)):
+        parameters[i] += delta
+        g_num.append((f(parameters) - y0) / delta)
+        parameters[i] -= delta
+    return g_num
+
+
+class GradientTests(unittest.TestCase):
+    @classmethod
+    def setUp(cls):
+        driver = RHF(hydrogen_dimer_chain(2))
+        driver.kernel()
+        n = len(driver.mo_energy)
+        cls.frozen_driver = common.NonSelfConsistentMeanField(driver)
+        cls.frozen_driver.kernel()
+        numpy.random.seed(0)
+        cls.umat_projector = numpy.random.rand(n, n // 2)
+        cls.reference_solution = dmet.utri2m(numpy.random.rand(n * (n+1) // 2))
+        cls.dm_projector = numpy.random.rand(n, n)
+        cls.dm_projector_i = numpy.eye(n)
+        cls.umat_projector_i = numpy.eye(n)[:, :n // 2]
+
+        cls.large_umat = dmet.utri2m(numpy.random.rand(n * (n+1) // 2))
+        n = n // 2
+        cls.small_umat = dmet.utri2m(numpy.random.rand(n * (n+1) // 2))
+
+    def test_generic_i(self):
+        """
+        Tests gradients of GenericUtriDMETUmatSelfConsistency with identity projections.
+        """
+        sc = dmet.GenericUtriDMETUmatSelfConsistency(
+            self.frozen_driver,
+            self.umat_projector_i,
+            self.reference_solution,
+            dm_projector=self.dm_projector_i,
+        )
+        testing.assert_allclose(
+            sc.gradients_cached(dmet.m2utri(self.small_umat)),
+            numeric_gradients(sc.f, dmet.m2utri(self.small_umat)),
+            atol=1e-5,
+        )
+
+    def test_generic(self):
+        """
+        Tests gradients of GenericUtriDMETUmatSelfConsistency with random projections.
+        """
+        sc = dmet.GenericUtriDMETUmatSelfConsistency(
+            self.frozen_driver,
+            self.umat_projector,
+            self.reference_solution,
+            dm_projector=self.dm_projector,
+        )
+        testing.assert_allclose(
+            sc.gradients_cached(dmet.m2utri(self.small_umat)),
+            numeric_gradients(sc.f, dmet.m2utri(self.small_umat)),
+            rtol=1e-4,
+        )
+
+    def test_frag_frag(self):
+        """
+        Tests gradients of FragmentFragmentDMETUSC with random projections.
+        """
+        sc = dmet.FragmentFragmentDMETUSC(
+            self.frozen_driver,
+            self.dm_projector,
+            self.reference_solution,
+        )
+        testing.assert_allclose(
+            sc.gradients_cached(dmet.m2utri(self.small_umat)),
+            numeric_gradients(sc.f, dmet.m2utri(self.small_umat)),
+            rtol=1e-4,
+        )
+
+    def test_frag_full(self):
+        """
+        Tests gradients of FragmentFullDMETUSC with random projections.
+        """
+        sc = dmet.FragmentFullDMETUSC(
+            self.frozen_driver,
+            self.dm_projector,
+            self.reference_solution,
+        )
+        testing.assert_allclose(
+            sc.gradients_cached(dmet.m2utri(self.small_umat)),
+            numeric_gradients(sc.f, dmet.m2utri(self.small_umat)),
+            rtol=1e-4,
+        )
+
+    def test_mu_frag(self):
+        """
+        Tests gradients of MuFragmentDMETUSC with random projections.
+        """
+        sc = dmet.MuFragmentDMETUSC(
+            self.frozen_driver,
+            self.dm_projector,
+            self.reference_solution,
+        )
+        testing.assert_allclose(
+            sc.gradients_cached(self.small_umat[0, 0]),
+            numeric_gradients(sc.f, self.small_umat[0, 0]),
+            rtol=1e-5,
+        )
+
+
 class HubbardModelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
