@@ -544,6 +544,7 @@ class DMET(object):
             associate=None,
             style="interacting-bath",
             conv_tol=1e-5,
+            schmidt_threshold=1e-14,
     ):
         """
         A DMET driver.
@@ -558,6 +559,8 @@ class DMET(object):
             be the same and to be embedded in the same environment;
             style (str): either 'ineracting-bath' or 'non-interacting-bath';
             conv_tol (float): the convergence criterion;
+            schmidt_threshold (float): a threshold to assign frozen orbitals in Schmidt decomposition
+            of a mean-field solution;
         """
         self.__mol__ = cheap.mol.copy()
 
@@ -576,6 +579,7 @@ class DMET(object):
             raise ValueError("The 'style' keyword argument must be either of {}".format(style_options))
         self.__style__ = style
         self.conv_tol = conv_tol
+        self.__schmidt_threshold__ = schmidt_threshold
 
         if associate == "all":
             associate = ("default",) * len(domains)
@@ -596,6 +600,7 @@ class DMET(object):
                     self.__domains__[domain_id].append(domain)
                 else:
                     self.__domains__[domain_id] = [domain]
+        self.check_domains()
 
         self.__orthogonal_basis__ = self.get_orthogonal_basis()
         self.__orthogonal_basis_inv__ = scipy.linalg.inv(self.__orthogonal_basis__)
@@ -604,6 +609,27 @@ class DMET(object):
         self.e_tot = None
 
         self.umat = None
+
+    def check_domains(self):
+        """
+        Performs a check whether domains cover the whole space and do not overlap. Raises an exception otherwise.
+        """
+        n = len(self.__mf_solver__.mo_energy)
+        space = numpy.zeros(n, dtype=int)
+        for domain_id, domain_list in self.__domains__.items():
+            for d in domain_list:
+                space[d] += 1
+        if not numpy.all(space == 1):
+            if (space == 0).sum() > 0:
+                raise ValueError(
+                    "Basis functions {} do not belong to either of the domains".format(numpy.argwhere(space == 0)[:, 0])
+                )
+            elif (space > 1).sum() > 0:
+                raise ValueError(
+                    "Basis functions {} belong to two or more domains".format(numpy.argwhere(space > 1)[:, 0])
+                )
+            else:
+                raise ValueError("Internal error")
 
     def get_orthogonal_basis(self):
         """
@@ -638,7 +664,7 @@ class DMET(object):
         occ_orth = transform(occ, self.__orthogonal_basis__, axes=0)
         for domain_id, domain_list in self.__domains__.items():
             d = domain_list[0]
-            ffaa = get_sd_schmidt_basis(occ_orth, d)
+            ffaa = get_sd_schmidt_basis(occ_orth, d, threshold=self.__schmidt_threshold__)
             n = len(domain_list[0])
             if ffaa[2].shape[1] == n:
                 ffaa[2][:n, :] = numpy.eye(n)
