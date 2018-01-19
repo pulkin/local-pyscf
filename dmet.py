@@ -878,6 +878,8 @@ class DMET(object):
                         sc.final_parameters,
                     ))
 
+            self.e_tot += mf.energy_nuc()
+
             if tolerance is not None:
                 self.convergence_history.append(self.convergence_measure(umat))
                 self.umat = umat
@@ -896,8 +898,6 @@ class DMET(object):
                     self.e_tot,
                     self.__mol__.nelectron - total_occupation,
                 ))
-
-            self.e_tot += mf.energy_nuc()
 
             if tolerance is None or self.convergence_history[-1] < tolerance:
                 return self.e_tot
