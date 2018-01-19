@@ -155,7 +155,7 @@ class HubbardModelTest(unittest.TestCase):
             numpy.arange(self.n).reshape(-1, fragment_size),
             **kwargs
         )
-        dummy_dmet.kernel()
+        dummy_dmet.kernel(maxiter=2)
 
         testing.assert_allclose(e_ref, dummy_dmet.e_tot, rtol=1e-6)
         if dummy_dmet.conv_tol is not None:
