@@ -234,7 +234,9 @@ class GenericDMETUmatSelfConsistency(object):
         numenator = virt_umat[:, numpy.newaxis, :, numpy.newaxis] * occ_umat[numpy.newaxis, :, numpy.newaxis, :]
         z = numenator / denominator[numpy.newaxis, numpy.newaxis, :, :]
 
-        return numpy.einsum("ij,abkj,lk->abil", occ_dm, z, virt_dm) + numpy.einsum("ij,abjk,lk->abil", virt_dm, z, occ_dm)
+        # Important: The "2" prefactor here indicates the fact that the spin-resctricted
+        # density matrix consists of doubly-occupied states
+        return 2*(numpy.einsum("ij,abkj,lk->abil", occ_dm, z, virt_dm) + numpy.einsum("ij,abjk,lk->abil", virt_dm, z, occ_dm))
 
     def gradients(self):
         """
