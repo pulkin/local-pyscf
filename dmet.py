@@ -78,11 +78,15 @@ class GenericDMETUmatSelfConsistency(object):
         """
         Sets the reference density matrix from the solver.
         Args:
-            solver: an arbitrary driver yielding single-particle density matrixes;
+            solver: an arbitrary driver capable of calculating one-particle density matrix or
+            the one-particle density matrix itself;
             solution_dm_slice (slice): an optional slice to apply to the reference density matrix;
         """
         n = self.dm_projector.shape[1]
-        dm = solver.make_rdm1()
+        if isinstance(solver, numpy.ndarray):
+            dm = solver
+        else:
+            dm = solver.make_rdm1()
         if solution_dm_slice is not None:
             dm = dm[solution_dm_slice, solution_dm_slice]
         if dm.shape != (n, n):
