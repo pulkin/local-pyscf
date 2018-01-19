@@ -761,11 +761,12 @@ class DMET(object):
             verbose=self.__nested_verbosity__,
         )
 
-    def kernel(self, tolerance="default"):
+    def kernel(self, tolerance="default", maxiter=30):
         """
         Performs a self-consistent DMET calculation.
         Args:
             tolerance (float): convergence criterion;
+            maxiter (int): maximal number of iterations;
         """
         if tolerance == "default":
             tolerance = self.conv_tol
@@ -901,6 +902,12 @@ class DMET(object):
             if tolerance is None or self.convergence_history[-1] < tolerance:
                 return self.e_tot
 
+            if maxiter is not None and len(self.convergence_history) >= maxiter:
+                raise RuntimeError("The maximal number of iterations {:d} reached. The error {:.3e} is still above the requested tolerance of {:.3e}".format(
+                    maxiter,
+                    self.convergence_history[-1],
+                    tolerance,
+                ))
 
 class AbInitioDMET(IntegralProvider):
     def __init__(self, cheap, expensive, domain, nested_verbosity=0):
