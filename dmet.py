@@ -669,7 +669,7 @@ class DMET(object):
             ffaa = get_sd_schmidt_basis(occ_orth, d, threshold=self.__schmidt_threshold__)
             n = len(domain_list[0])
             if ffaa[2].shape[1] == n:
-                ffaa[2][:n, :] = numpy.eye(n)
+                ffaa[2][d, :] = numpy.eye(n)
             yield domain_id, d, ffaa
 
     def get_umat(self, exclude=None):
