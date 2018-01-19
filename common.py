@@ -502,7 +502,10 @@ def partial_etot(hcore, eri, rho1, rho2, s):
         empty_slice = slice(None)
         return 1.0/len(x.shape) * sum(x[(empty_slice,)*i + (significant_slice,)].sum() for i in range(len(x.shape)))
 
-    return democratic_partitioning(term1, s) + democratic_partitioning(term2, s)
+    def democratic_partitioning_fast(x, significant_slice):
+        return x[significant_slice].sum()
+
+    return democratic_partitioning_fast(term1, s) + democratic_partitioning_fast(term2, s)
 
 
 def partial_nelec(rho1, s):
