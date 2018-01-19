@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from pyscf.scf import RHF
 import numpy
 import dmet
 import common
