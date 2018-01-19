@@ -6,7 +6,7 @@ import common
 
 import unittest
 from numpy import testing
-from test_common import hubbard_model_driver
+from test_common import hubbard_model_driver, hydrogen_dimer_chain
 
 
 class HubbardModelTest(unittest.TestCase):
