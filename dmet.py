@@ -909,25 +909,18 @@ class DMET(object):
                     tolerance,
                 ))
 
-class AbInitioDMET(IntegralProvider):
-    def __init__(self, cheap, expensive, domain, nested_verbosity=0):
+
+class AbInitioDMET(DMET):
+    def __init__(self, cheap, expensive, self_consistency, domains, **kwargs):
         """
-        A DMET driver.
+        Ab-initio DMET driver where domains are atoms rather than basis functions.
         Args:
             cheap: an initialized cheap mean-field solver of the entire system;
             expensive: a class performing an expensive calculation of the embedded system;
-            domain (list): atoms to be included into the embedded system;
-            nested_verbosity (int): the verbosity level of the nested output;
+            self_consistency: a self-consistency driver;
+            domains (list): a nested list with basis functions to be included into local domains;
+            **kwargs: keyword arguments to `DMET`;
         """
-        IntegralProvider.__init__(self, cheap.mol)
-        self.__mf_solver__ = cheap
-        if nested_verbosity is not None:
-            cheap.verbose = nested_verbosity
-        self.__domain__ = self.get_atom_basis(domain)
-        self.__correlated_solver__ = expensive
-
-        self.__orthogonal_basis__ = self.get_orthogonal_basis()
-        self.__orthogonal_basis_inv__ = scipy.linalg.inv(self.__orthogonal_basis__)
-
-        self.convergence_history = []
-        self.e_tot = None
+        ip = IntegralProvider(cheap.mol)
+        domains = list(ip.get_atom_basis(i) for i in domains)
+        DMET.__init__(self, cheap, expensive, self_consistency, domains, **kwargs)
