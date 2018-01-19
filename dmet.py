@@ -48,6 +48,8 @@ class GenericDMETUmatSelfConsistency(object):
         Args:
             driver: a mean-field object;
             umat_projector (numpy.ndarray): a projector for the u-matrix from the local domain to the entire model;
+            reference_solution: an arbitrary driver capable of calculating one-particle density matrix or
+            the one-particle density matrix itself;
             dm_projector (numpy.ndarray): a projector for the density matrix from the entire model onto the local domain;
             log: a pyscf object to log to;
             solution_dm_slice (slice): an optional slice to apply to the reference density matrix;
@@ -313,6 +315,8 @@ class FragmentFragmentDMETUSC(GenericUtriDMETUmatSelfConsistency):
         Args:
             driver: a mean-field object;
             projector (numpy.ndarray): a projector for the local fragment;
+            reference_solution: an arbitrary driver capable of calculating one-particle density matrix or
+            the one-particle density matrix itself;
             log: a pyscf object to log to;
         """
         n = projector.shape[1]
@@ -333,6 +337,8 @@ class FragmentFullDMETUSC(GenericUtriDMETUmatSelfConsistency):
         Args:
             driver: a mean-field object;
             projector (numpy.ndarray): a projector for the local fragment;
+            reference_solution: an arbitrary driver capable of calculating one-particle density matrix or
+            the one-particle density matrix itself;
             log: a pyscf object to log to;
         """
         n = projector.shape[1]
@@ -353,6 +359,8 @@ class MuFragmentDMETUSC(GenericDMETUmatSelfConsistency):
         Args:
             driver: a mean-field object;
             projector (numpy.ndarray): a projector for the local fragment;
+            reference_solution: an arbitrary driver capable of calculating one-particle density matrix or
+            the one-particle density matrix itself;
             log: a pyscf object to log to;
         """
         n = projector.shape[1]
